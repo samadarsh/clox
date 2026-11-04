@@ -1,0 +1,9 @@
+// for (;;) is an infinite loop with nothing else in it.
+var i = 0;
+for (;;) {
+  print i;
+  i = i + 1;
+  if (i == 2) -"stop"; // expect runtime error: Operand must be a number.
+}
+// expect: 0
+// expect: 1

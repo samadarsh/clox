@@ -84,6 +84,20 @@ check "missing file exits 74" 74 "" "Could not open file \"$TMP/does-not-exist.l
 echo "\"$CLOX\" a b" > "$TMP/cmd"
 check "too many arguments exits 64" 64 "" "Usage: clox [path]"
 
+# The 16-bit limit on forward jumps. Each "nil;" compiles to 2 bytes
+# (OP_NIL, OP_POP), and the jump over the then-branch also crosses its OP_POP
+# (1 byte) and the OP_JUMP over the else-branch (3 bytes): 2n + 4 bytes.
+# These programs are ~130 KB, so they're generated here, not stored in tests/.
+bigif() {
+  awk -v n="$1" 'BEGIN { printf "if (false) {"; for (i = 0; i < n; i++) printf " nil;"; print " }"; print "print \"ok\";" }' > "$TMP/big.lox"
+}
+bigif 32765   # jump = 65534 bytes: fits in 16 bits
+echo "\"$CLOX\" \"$TMP/big.lox\"" > "$TMP/cmd"
+check "jump of 65534 bytes works" 0 "ok" ""
+bigif 32766   # jump = 65536 bytes: too far
+check "jump of 65536 bytes is a compile error" 65 "" \
+  "[line 1] Error at '}': Too much code to jump over."
+
 if [ "$failed" -ne 0 ]; then
   echo "$passed passed, $failed failed"
   exit 1

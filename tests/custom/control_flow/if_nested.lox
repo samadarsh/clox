@@ -1,0 +1,21 @@
+// Every path through a three-level if/else.
+var x = 5;
+if (x > 0) {
+  if (x > 10) {
+    print "big";
+  } else {
+    if (x == 5) print "five"; else print "small";
+  }
+} else {
+  print "not positive";
+}
+// expect: five
+
+if (false) print "a"; else if (nil) print "b"; else if (0) print "c"; else print "d";
+// expect: c
+
+// else binds to the nearest if (the "dangling else").
+if (true) if (false) print "inner then"; else print "inner else";
+// expect: inner else
+if (false) if (true) print "never"; else print "never either";
+print "done"; // expect: done

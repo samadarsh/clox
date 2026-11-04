@@ -18,7 +18,7 @@ macOS.
 - [x] **2. Scanner and compiler**: scan and compile expressions with a Pratt parser (ch. 16–17)
 - [x] **3. Types and strings**: booleans, nil and heap-allocated strings (ch. 18–19)
 - [x] **4. Hash tables and variables**: global and local variables (ch. 20–22)
-- [ ] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
+- [x] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
 - [ ] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
 - [ ] **7. Garbage collector**: mark-sweep with tri-color marking (ch. 26)
 - [ ] **8. Classes and inheritance**: instances, methods, initializers and `super` (ch. 27–29)
@@ -41,9 +41,12 @@ make trace        # debug build that prints every instruction as it runs
 ./build/release/clox script.lox   # run a file
 ```
 
-So far (milestone 4), clox runs statements: `print`, expression statements,
-`var` declarations, assignment and `{ }` blocks with local variables. Values
-are numbers, booleans, `nil` and strings. Control flow arrives in milestone 5.
+So far (milestone 5), clox runs statements: `print`, `var`, assignment,
+`{ }` blocks with local variables, `if`/`else`, `while` and `for`, with
+short-circuiting `and`/`or`. Values are numbers, booleans, `nil` and strings.
+Functions arrive in milestone 6. For a larger example (FizzBuzz, Fibonacci,
+nested loops), see
+[tests/custom/programs/control_flow_demo.lox](tests/custom/programs/control_flow_demo.lox).
 
 ```
 > var greeting = "hello";

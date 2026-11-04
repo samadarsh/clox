@@ -1,0 +1,12 @@
+// The right side of `or` must not run when the left side is truthy.
+print true or undefinedVar; // expect: true
+print 0 or undefinedVar;    // expect: 0
+print "x" or undefinedVar;  // expect: x
+
+var a = "unchanged";
+true or (a = "changed");
+print a; // expect: unchanged
+
+// When the left side is falsey, the right side runs and is the result.
+print nil or "fallback"; // expect: fallback
+print false or nil;      // expect: nil

@@ -1,0 +1,14 @@
+// The right side of `and` must not run when the left side is falsey.
+// If it ran, reading an undefined variable would be a runtime error.
+print false and undefinedVar; // expect: false
+print nil and undefinedVar;   // expect: nil
+
+// Side effects on the right side don't happen either.
+var a = "unchanged";
+false and (a = "changed");
+print a; // expect: unchanged
+
+// When the left side is truthy, the right side runs and is the result.
+true and (a = "changed");
+print a;          // expect: changed
+print 1 and 2;    // expect: 2

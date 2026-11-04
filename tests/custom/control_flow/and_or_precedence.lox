@@ -1,0 +1,7 @@
+// `and` binds tighter than `or`: this is true or (false and false).
+print true or false and false; // expect: true
+// Both bind looser than comparison: (1 < 2) and (2 < 3).
+print 1 < 2 and 2 < 3;          // expect: true
+// Chains short-circuit at the first deciding operand.
+print false or nil or "third";  // expect: third
+print 1 and 2 and nil and undefinedVar; // expect: nil

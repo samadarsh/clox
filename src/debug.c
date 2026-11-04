@@ -33,6 +33,18 @@ static int byteInstruction(const char* name, Chunk* chunk,
   return offset + 2;
 }
 
+// A jump's operand is a 16-bit offset stored as two bytes, high byte first.
+// Shows where the jump lands: forward for OP_JUMP(_IF_FALSE) (sign = 1),
+// backward for OP_LOOP (sign = -1). The +3 skips the jump instruction itself.
+static int jumpInstruction(const char* name, int sign,
+                           Chunk* chunk, int offset) {
+  uint16_t jump = (uint16_t)(chunk->code[offset + 1] << 8);
+  jump |= chunk->code[offset + 2];
+  printf("%-16s %4d -> %d\n", name, offset,
+         offset + 3 + sign * jump);
+  return offset + 3;
+}
+
 // Prints one instruction and returns the offset of the next one.
 // Instructions have different sizes, so the caller can't just add 1.
 int disassembleInstruction(Chunk* chunk, int offset) {
@@ -85,6 +97,12 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return simpleInstruction("OP_NEGATE", offset);
     case OP_PRINT:
       return simpleInstruction("OP_PRINT", offset);
+    case OP_JUMP:
+      return jumpInstruction("OP_JUMP", 1, chunk, offset);
+    case OP_JUMP_IF_FALSE:
+      return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+    case OP_LOOP:
+      return jumpInstruction("OP_LOOP", -1, chunk, offset);
     case OP_RETURN:
       return simpleInstruction("OP_RETURN", offset);
     default:

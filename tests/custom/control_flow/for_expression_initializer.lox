@@ -1,0 +1,7 @@
+// The initializer can be an expression statement instead of a var.
+var i;
+for (i = 10; i < 13; i = i + 1) print i;
+// expect: 10
+// expect: 11
+// expect: 12
+print i; // expect: 13

@@ -1,0 +1,81 @@
+// A small program using everything from milestone 5.
+
+// FizzBuzz without the % operator (Lox has none): keep countdowns instead.
+var fizz = 3;
+var buzz = 5;
+for (var n = 1; n <= 15; n = n + 1) {
+  fizz = fizz - 1;
+  buzz = buzz - 1;
+  if (fizz == 0 and buzz == 0) {
+    print "FizzBuzz";
+    fizz = 3;
+    buzz = 5;
+  } else if (fizz == 0) {
+    print "Fizz";
+    fizz = 3;
+  } else if (buzz == 0) {
+    print "Buzz";
+    buzz = 5;
+  } else {
+    print n;
+  }
+}
+
+// Fibonacci numbers below 100, with a while loop.
+var a = 0;
+var b = 1;
+var fibs = "";
+while (a < 100) {
+  fibs = fibs + (fibs == "" and "" or ", ");
+  // Lox can't turn numbers into strings yet, so build the text with ifs.
+  if (a == 0) fibs = fibs + "0";
+  if (a == 1) fibs = fibs + "1";
+  if (a == 2) fibs = fibs + "2";
+  if (a == 3) fibs = fibs + "3";
+  if (a == 5) fibs = fibs + "5";
+  if (a == 8) fibs = fibs + "8";
+  if (a == 13) fibs = fibs + "13";
+  if (a == 21) fibs = fibs + "21";
+  if (a == 34) fibs = fibs + "34";
+  if (a == 55) fibs = fibs + "55";
+  if (a == 89) fibs = fibs + "89";
+  var next = a + b;
+  a = b;
+  b = next;
+}
+print fibs;
+
+// Nested loops: a small triangle.
+for (var row = 1; row <= 4; row = row + 1) {
+  var line = "";
+  for (var col = 0; col < row; col = col + 1) line = line + "*";
+  print line;
+}
+
+// Short-circuit: a default value, and a guard that skips an undefined name.
+var name = nil;
+print name or "anonymous";
+print false and missingVariable;
+
+// expect: 1
+// expect: 2
+// expect: Fizz
+// expect: 4
+// expect: Buzz
+// expect: Fizz
+// expect: 7
+// expect: 8
+// expect: Fizz
+// expect: Buzz
+// expect: 11
+// expect: Fizz
+// expect: 13
+// expect: 14
+// expect: FizzBuzz
+// expect: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89
+// expect: *
+// expect: **
+// expect: ***
+// expect: ****
+// expect: anonymous
+// expect: false

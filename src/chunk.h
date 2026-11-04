@@ -26,6 +26,9 @@ typedef enum {
   OP_NOT,
   OP_NEGATE,
   OP_PRINT,
+  OP_JUMP,          // operand: 16-bit forward offset
+  OP_JUMP_IF_FALSE, // operand: 16-bit forward offset; leaves the condition on the stack
+  OP_LOOP,          // operand: 16-bit backward offset
   OP_RETURN,
 } OpCode;
 

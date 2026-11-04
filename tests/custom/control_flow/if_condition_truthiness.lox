@@ -1,0 +1,4 @@
+// Only nil and false skip the then-branch.
+if (0) print "0 is truthy";        // expect: 0 is truthy
+if ("") print "empty is truthy";   // expect: empty is truthy
+if (nil) print "nil"; else print "nil is falsey"; // expect: nil is falsey

@@ -1,0 +1,3 @@
+// When the left side does not decide the result, the right side runs, so
+// the undefined variable is read and is an error.
+print true and undefinedVar; // expect runtime error: Undefined variable 'undefinedVar'.

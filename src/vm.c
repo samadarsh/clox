@@ -88,6 +88,9 @@ static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
+// Read a 16-bit operand: two bytes, high byte first. ip moves past both.
+#define READ_SHORT() \
+    (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
 // Check both operands are numbers, then pop b first: the right operand was
 // pushed last, so it is on top. valueType wraps the result (NUMBER_VAL for
 // arithmetic, BOOL_VAL for comparisons).
@@ -208,6 +211,25 @@ static InterpretResult run(void) {
         printf("\n");
         break;
       }
+      case OP_JUMP: {
+        // A jump just moves the instruction pointer. The offset counts from
+        // the byte after the operand, because READ_SHORT already moved past it.
+        uint16_t offset = READ_SHORT();
+        vm.ip += offset;
+        break;
+      }
+      case OP_JUMP_IF_FALSE: {
+        uint16_t offset = READ_SHORT();
+        // Peek, don't pop: the condition stays on the stack. `and`/`or` need
+        // it as their result; statements emit their own OP_POP.
+        if (isFalsey(peek(0))) vm.ip += offset;
+        break;
+      }
+      case OP_LOOP: {
+        uint16_t offset = READ_SHORT();
+        vm.ip -= offset;
+        break;
+      }
       case OP_RETURN: {
         // Exit interpreter.
         return INTERPRET_OK;
@@ -217,6 +239,7 @@ static InterpretResult run(void) {
 
 #undef READ_BYTE
 #undef READ_CONSTANT
+#undef READ_SHORT
 #undef READ_STRING
 #undef BINARY_OP
 }

@@ -1,0 +1,9 @@
+// With no condition the loop runs forever. Lox has no break (and no return
+// until chapter 24), so this test ends the loop with a runtime error.
+for (var i = 0;; i = i + 1) {
+  print i;
+  if (i == 2) nil + 1; // expect runtime error: Operands must be two numbers or two strings.
+}
+// expect: 0
+// expect: 1
+// expect: 2

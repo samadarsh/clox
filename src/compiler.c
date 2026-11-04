@@ -141,6 +141,29 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte2);
 }
 
+// Emits OP_LOOP, which jumps *backwards* to loopStart. The target is already
+// known (we've compiled past it), so no patching is needed.
+static void emitLoop(int loopStart) {
+  emitByte(OP_LOOP);
+
+  // +2 to also jump back over OP_LOOP's own two operand bytes.
+  int offset = currentChunk()->count - loopStart + 2;
+  if (offset > UINT16_MAX) error("Loop body too large.");
+
+  emitByte((offset >> 8) & 0xff);
+  emitByte(offset & 0xff);
+}
+
+// Emits a forward jump whose target isn't known yet. The two operand bytes
+// are placeholders (0xffff). Returns where they are, so patchJump can fill
+// them in once the compiler reaches the target.
+static int emitJump(uint8_t instruction) {
+  emitByte(instruction);
+  emitByte(0xff);
+  emitByte(0xff);
+  return currentChunk()->count - 2;
+}
+
 static void emitReturn(void) {
   emitByte(OP_RETURN);
 }
@@ -158,6 +181,21 @@ static uint8_t makeConstant(Value value) {
 
 static void emitConstant(Value value) {
   emitBytes(OP_CONSTANT, makeConstant(value));
+}
+
+// Backpatching: the jump at `offset` should land *here*, at the next byte
+// the compiler will emit. Now that we know the distance, overwrite the
+// placeholder bytes with it.
+static void patchJump(int offset) {
+  // -2 to adjust for the bytecode for the jump offset itself.
+  int jump = currentChunk()->count - offset - 2;
+
+  if (jump > UINT16_MAX) {
+    error("Too much code to jump over.");
+  }
+
+  currentChunk()->code[offset] = (jump >> 8) & 0xff;
+  currentChunk()->code[offset + 1] = jump & 0xff;
 }
 
 static void initCompiler(Compiler* compiler) {
@@ -287,6 +325,19 @@ static void defineVariable(uint8_t global) {
   emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
+// `a and b`: the left operand is already on the stack. If it's falsey, that is
+// the result, so skip the right operand entirely (short-circuit). Otherwise
+// discard it and the right operand's value becomes the result.
+static void and_(bool canAssign) {
+  (void)canAssign;
+  int endJump = emitJump(OP_JUMP_IF_FALSE);
+
+  emitByte(OP_POP);
+  parsePrecedence(PREC_AND);
+
+  patchJump(endJump);
+}
+
 // Infix: the left operand is already compiled, and the operator was just
 // consumed.
 static void binary(bool canAssign) {
@@ -337,6 +388,21 @@ static void number(bool canAssign) {
   // first character that can't be part of a number, which is the token's end.
   double value = strtod(parser.previous.start, NULL);
   emitConstant(NUMBER_VAL(value));
+}
+
+// `a or b`: if the left operand is truthy, that is the result, so jump over
+// the right operand. There's no "jump if true" instruction, so it's built
+// from a jump-if-false over an unconditional jump.
+static void or_(bool canAssign) {
+  (void)canAssign;
+  int elseJump = emitJump(OP_JUMP_IF_FALSE);
+  int endJump = emitJump(OP_JUMP);
+
+  patchJump(elseJump);
+  emitByte(OP_POP);
+
+  parsePrecedence(PREC_OR);
+  patchJump(endJump);
 }
 
 static void string(bool canAssign) {
@@ -411,7 +477,7 @@ ParseRule rules[] = {
   [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
@@ -419,7 +485,7 @@ ParseRule rules[] = {
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
@@ -499,6 +565,91 @@ static void expressionStatement(void) {
   emitByte(OP_POP);
 }
 
+// A for loop is compiled entirely out of jumps; the VM has no "for"
+// instruction. The layout of the emitted code is:
+//
+//   initializer
+//   loopStart:      condition
+//                   OP_JUMP_IF_FALSE -> exit      (only if there's a condition)
+//                   OP_POP
+//                   OP_JUMP -> body               (only if there's an increment)
+//   incrementStart: increment
+//                   OP_POP
+//                   OP_LOOP -> loopStart
+//   body:           body
+//                   OP_LOOP -> incrementStart  (or loopStart, without increment)
+//   exit:           OP_POP                        (only if there's a condition)
+//
+// The increment is written before the body in the source, but must run after
+// it. A single pass can't reorder code, so it jumps over the increment, runs
+// the body, then loops back to the increment, which loops back to the condition.
+static void forStatement(void) {
+  // The loop variable belongs to a scope around the whole loop.
+  beginScope();
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+  if (match(TOKEN_SEMICOLON)) {
+    // No initializer.
+  } else if (match(TOKEN_VAR)) {
+    varDeclaration();
+  } else {
+    expressionStatement();
+  }
+
+  int loopStart = currentChunk()->count;
+  int exitJump = -1;
+  if (!match(TOKEN_SEMICOLON)) {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+
+    // Jump out of the loop if the condition is false.
+    exitJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP); // Condition.
+  }
+
+  if (!match(TOKEN_RIGHT_PAREN)) {
+    int bodyJump = emitJump(OP_JUMP);
+    int incrementStart = currentChunk()->count;
+    expression();
+    emitByte(OP_POP);
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+    emitLoop(loopStart);
+    loopStart = incrementStart;
+    patchJump(bodyJump);
+  }
+
+  statement();
+  emitLoop(loopStart);
+
+  if (exitJump != -1) {
+    patchJump(exitJump);
+    emitByte(OP_POP); // Condition.
+  }
+
+  endScope();
+}
+
+static void ifStatement(void) {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  // Where to go if the condition is false. Unknown until the then-branch is
+  // compiled, so emit a placeholder now and patch it below.
+  int thenJump = emitJump(OP_JUMP_IF_FALSE);
+  emitByte(OP_POP);  // condition, on the "true" path
+  statement();
+
+  // After the then-branch, skip over the else-branch.
+  int elseJump = emitJump(OP_JUMP);
+
+  patchJump(thenJump);
+  emitByte(OP_POP);  // condition, on the "false" path
+
+  if (match(TOKEN_ELSE)) statement();
+  patchJump(elseJump);
+}
+
 static void printStatement(void) {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after value.");
@@ -532,6 +683,21 @@ static void synchronize(void) {
   }
 }
 
+static void whileStatement(void) {
+  int loopStart = currentChunk()->count;
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  int exitJump = emitJump(OP_JUMP_IF_FALSE);
+  emitByte(OP_POP);
+  statement();
+  emitLoop(loopStart);
+
+  patchJump(exitJump);
+  emitByte(OP_POP);
+}
+
 static void declaration(void) {
   if (match(TOKEN_VAR)) {
     varDeclaration();
@@ -545,6 +711,12 @@ static void declaration(void) {
 static void statement(void) {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_FOR)) {
+    forStatement();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();

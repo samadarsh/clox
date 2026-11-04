@@ -12,6 +12,12 @@ explanation.
 | `variables/` | shadowing (the milestone 4 walkthrough), locals vs globals, chained assignment |
 | `runtime_error/` | type errors upstream lacks (`1 + "a"`, `"a" < "b"`), error line numbers, execution stopping at the error |
 | `compile_error/` | missing `)`/`;`/`}`, "Expect expression.", panic mode, recovery at the next statement, invalid assignment target |
+| `control_flow/` | nested `if`/`else`, short-circuit `and`/`or` (the right side must not run), every `for` clause missing, zero-iteration loops, stack balance over 1000 iterations, jumps over more than 255 bytes |
+| `programs/` | longer programs using many features together |
+
+The 16-bit jump limit itself ("Too much code to jump over.", at exactly
+65,536 bytes) is tested in `tests/cli_test.sh`, which generates the ~130 KB
+programs while it runs instead of storing them here.
 
 History: at milestones 2–3 there was no `print` or `;`, so these were one
 expression per file, and 21 upstream `operator/` tests were ported here with

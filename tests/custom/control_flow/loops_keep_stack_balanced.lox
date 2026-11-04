@@ -1,0 +1,13 @@
+// Each iteration must pop exactly what it pushed (the condition, any
+// expression statements). The VM stack has 256 slots, so if one value leaked
+// per iteration, 1000 iterations would overflow it.
+var i = 0;
+var total = 0;
+while (i < 1000) {
+  if (i < 500 and total >= 0 or false) total = total + 1; else total = total + 2;
+  i = i + 1;
+}
+print total; // expect: 1500
+
+for (var j = 0; j < 1000; j = j + 1) { var temp = j; temp and nil; }
+print "balanced"; // expect: balanced

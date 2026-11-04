@@ -1,0 +1,6 @@
+// The loop variable is local to the loop and gone afterwards.
+var i = "global";
+for (var i = 0; i < 2; i = i + 1) print i;
+// expect: 0
+// expect: 1
+print i; // expect: global

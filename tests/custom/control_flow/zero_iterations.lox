@@ -1,0 +1,11 @@
+// A loop whose condition is false at the start never runs its body.
+while (false) print "while body";
+while (nil) print "while body";
+for (var i = 0; i < 0; i = i + 1) print "for body";
+for (; false;) print "for body";
+
+// The condition is still evaluated exactly once.
+var checks = 0;
+while ((checks = checks + 1) > 100) print "never";
+print checks; // expect: 1
+print "done"; // expect: done
