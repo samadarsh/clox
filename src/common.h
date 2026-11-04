@@ -5,10 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Define DEBUG_TRACE_EXECUTION to make the VM print the stack and each
-// instruction as it runs. Rather than editing this file (as the book does),
-// build with `make trace`, which passes -DDEBUG_TRACE_EXECUTION. That keeps
-// trace output out of normal builds, where it would break the tests.
+// Debug switches. Rather than editing this file (as the book does), build
+// with `make trace`, which passes both as -D flags. That keeps debug output
+// out of normal builds, where it would break the tests.
+//
+// DEBUG_PRINT_CODE       print the disassembled chunk after compiling
+// DEBUG_TRACE_EXECUTION  print the stack and each instruction as it runs
+// #define DEBUG_PRINT_CODE
 // #define DEBUG_TRACE_EXECUTION
 
 #endif

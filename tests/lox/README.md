@@ -3,12 +3,22 @@
 Test scripts copied from the book's repository,
 [munificent/craftinginterpreters/test](https://github.com/munificent/craftinginterpreters/tree/master/test)
 (MIT licensed, © Robert Nystrom). The directory layout matches upstream, so
-`tests/lox/operator/add.lox` here is `test/operator/add.lox` there.
+`tests/lox/number/leading_dot.lox` here is `test/number/leading_dot.lox` there.
+Don't edit these files.
 
-We add tests only once clox passes them. Milestone 1 has no scanner or
-compiler, so this directory is empty for now. The first tests arrive with
-milestone 2 (chapters 16–17).
+A test is added only once clox passes it.
 
-Run them with `make test-lox`, or run a single file or folder:
+| Milestone | Added |
+|---|---|
+| 2 | `expressions/evaluate.lox`, `number/leading_dot.lox`, `string/unterminated.lox` |
 
-    python3 tests/run_tests.py build/release/clox tests/lox/operator
+Most official tests use `print` and statements, which arrive in chapter 21
+(milestone 4). Until then, only these three pass.
+
+`expressions/` is only for the chapters before statements exist. From chapter
+21 onwards, upstream's runner skips it (`earlyChapters` in `tool/bin/test.dart`),
+and so will we.
+
+Run one file or folder with:
+
+    python3 tests/run_tests.py build/release/clox tests/lox/number

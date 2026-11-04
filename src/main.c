@@ -1,43 +1,82 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "common.h"
 #include "chunk.h"
 #include "debug.h"
 #include "vm.h"
 
-// Milestone 1: there is no compiler yet, so we build a chunk by hand.
-// It is the bytecode for the Lox expression  -((1.2 + 3.4) / 5.6)
-// Chapter 16 replaces this with a REPL and a script runner.
-int main(int argc, const char* argv[]) {
-  (void)argc;  // unused until chapter 16; silences -Wunused-parameter
-  (void)argv;
+static void repl(void) {
+  // One line at a time, up to 1023 characters (the book's simple limit).
+  char line[1024];
+  for (;;) {
+    printf("> ");
 
+    if (!fgets(line, sizeof(line), stdin)) {
+      // End of input (Ctrl-D, or the end of a piped file).
+      printf("\n");
+      break;
+    }
+
+    interpret(line);
+  }
+}
+
+// Reads a whole file into a newly allocated, '\0'-terminated string.
+// The caller owns the returned buffer and must free() it.
+static char* readFile(const char* path) {
+  FILE* file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "Could not open file \"%s\".\n", path);
+    exit(74);
+  }
+
+  // Jump to the end to learn the size, then go back to the start.
+  fseek(file, 0L, SEEK_END);
+  size_t fileSize = ftell(file);
+  rewind(file);
+
+  // +1 for the '\0' terminator the scanner relies on to find the end.
+  char* buffer = (char*)malloc(fileSize + 1);
+  if (buffer == NULL) {
+    fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
+    exit(74);
+  }
+
+  size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+  if (bytesRead < fileSize) {
+    fprintf(stderr, "Could not read file \"%s\".\n", path);
+    exit(74);
+  }
+
+  buffer[bytesRead] = '\0';
+
+  fclose(file);
+  return buffer;
+}
+
+static void runFile(const char* path) {
+  char* source = readFile(path);
+  InterpretResult result = interpret(source);
+  free(source);
+
+  if (result == INTERPRET_COMPILE_ERROR) exit(65);
+  if (result == INTERPRET_RUNTIME_ERROR) exit(70);
+}
+
+int main(int argc, const char* argv[]) {
   initVM();
 
-  Chunk chunk;
-  initChunk(&chunk);
-
-  int constant = addConstant(&chunk, 1.2);
-  writeChunk(&chunk, OP_CONSTANT, 123);
-  writeChunk(&chunk, constant, 123);
-
-  constant = addConstant(&chunk, 3.4);
-  writeChunk(&chunk, OP_CONSTANT, 123);
-  writeChunk(&chunk, constant, 123);
-
-  writeChunk(&chunk, OP_ADD, 123);
-
-  constant = addConstant(&chunk, 5.6);
-  writeChunk(&chunk, OP_CONSTANT, 123);
-  writeChunk(&chunk, constant, 123);
-
-  writeChunk(&chunk, OP_DIVIDE, 123);
-  writeChunk(&chunk, OP_NEGATE, 123);
-
-  writeChunk(&chunk, OP_RETURN, 123);
-
-  disassembleChunk(&chunk, "test chunk");
-  interpret(&chunk);
+  if (argc == 1) {
+    repl();
+  } else if (argc == 2) {
+    runFile(argv[1]);
+  } else {
+    fprintf(stderr, "Usage: clox [path]\n");
+    exit(64);
+  }
 
   freeVM();
-  freeChunk(&chunk);
   return 0;
 }

@@ -1,0 +1,3 @@
+// Same rule with the * on the left: (2 * 3) + 1.
+2 * 3 + 1
+// expect: 7

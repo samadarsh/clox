@@ -1,0 +1,3 @@
+// Panic mode: after the first error, later ones are suppressed.
+// [line 3] Error at ')': Expect expression.
+) ) )

@@ -24,7 +24,7 @@ ifeq ($(MODE),release)
 else ifeq ($(MODE),debug)
   FLAGS = $(DEBUG_FLAGS)
 else ifeq ($(MODE),trace)
-  FLAGS = $(DEBUG_FLAGS) -DDEBUG_TRACE_EXECUTION
+  FLAGS = $(DEBUG_FLAGS) -DDEBUG_PRINT_CODE -DDEBUG_TRACE_EXECUTION
 else
   $(error Unknown MODE '$(MODE)': use release, debug or trace)
 endif
@@ -40,7 +40,7 @@ CLOX     = $(OUT)/clox
 UNIT_SRC = $(wildcard tests/unit/*.c)
 UNIT_BIN = $(UNIT_SRC:tests/unit/%.c=$(OUT)/tests/%)
 
-.PHONY: all build debug trace test test-asan test-unit test-golden test-lox clean
+.PHONY: all build debug trace test test-asan test-unit test-cli test-lox clean
 
 all: build
 
@@ -71,26 +71,25 @@ $(OUT)/tests/%: tests/unit/%.c $(LIB_OBJ)
 
 # --- testing ----------------------------------------------------------------
 
-test: test-unit test-golden test-lox
+test: test-unit test-cli test-lox
 
 test-asan:
 	@$(MAKE) --no-print-directory MODE=debug test
 
-# C unit tests for the data structures (chunk, value array, VM stack).
+# C unit tests: chunk, value array, VM stack, scanner.
 test-unit: $(UNIT_BIN)
 	@for t in $(UNIT_BIN); do echo "--- $$t"; $$t || exit 1; done
 
-# Milestone 1 only: main.c runs a hand-built chunk, so compare its output with
-# a known-good copy. Chapter 16 replaces this with real .lox tests.
-test-golden: $(CLOX)
-	@echo "--- golden: hand-built chunk"
-	@$(CLOX) > $(OUT)/golden.out
-	@diff -u tests/golden/milestone1.expected $(OUT)/golden.out && echo "PASS"
+# Command-line behaviour: REPL, exit codes for missing files and bad usage.
+test-cli: $(CLOX)
+	@echo "--- cli"
+	@sh tests/cli_test.sh $(CLOX)
 
-# Official Crafting Interpreters tests, added as each milestone passes them.
+# tests/lox:    official Crafting Interpreters tests, added as milestones pass them
+# tests/custom: our own .lox tests for cases the official suite can't cover yet
 test-lox: $(CLOX)
-	@echo "--- lox tests"
-	@python3 tests/run_tests.py $(CLOX) tests/lox
+	@echo "--- lox tests (official + custom)"
+	@python3 tests/run_tests.py $(CLOX) tests/lox tests/custom
 
 clean:
 	rm -rf build

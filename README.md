@@ -15,7 +15,7 @@ macOS.
 ## Roadmap
 
 - [x] **1. Bytecode and VM**: chunks, a disassembler and a stack-based VM (ch. 14–15)
-- [ ] **2. Scanner and compiler**: scan and compile expressions with a Pratt parser (ch. 16–17)
+- [x] **2. Scanner and compiler**: scan and compile expressions with a Pratt parser (ch. 16–17)
 - [ ] **3. Types and strings**: booleans, nil and heap-allocated strings (ch. 18–19)
 - [ ] **4. Hash tables and variables**: global and local variables (ch. 20–22)
 - [ ] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
@@ -34,20 +34,41 @@ make debug        # with AddressSanitizer + UBSan -> build/debug/clox
 make trace        # debug build that prints every instruction as it runs
 ```
 
-At milestone 1 there is no compiler yet. `clox` runs a hand-built chunk of
-bytecode for `-((1.2 + 3.4) / 5.6)`:
+## Usage
+
+```sh
+./build/release/clox              # start the REPL
+./build/release/clox script.lox   # run a file
+```
+
+So far (milestone 2), a program is a single arithmetic expression, and clox
+prints its value. Statements and `print` arrive in milestone 4.
 
 ```
-$ ./build/release/clox
-== test chunk ==
-0000  123 OP_CONSTANT         0 '1.2'
-0002    | OP_CONSTANT         1 '3.4'
-0004    | OP_ADD
-0005    | OP_CONSTANT         2 '5.6'
-0007    | OP_DIVIDE
-0008    | OP_NEGATE
-0009    | OP_RETURN
--0.821429
+> 1 + 2 * 3
+7
+> -(5 - (3 - 1)) / 2
+-1.5
+> (1 + 2
+[line 2] Error at end: Expect ')' after expression.
+```
+
+Exit codes follow the book: `65` compile error, `70` runtime error,
+`74` file can't be read, `64` bad usage.
+
+`make trace` builds a version that prints the compiled bytecode and then
+every instruction and the stack as the VM runs it:
+
+```
+$ ./build/trace/clox walk.lox          # 1 + 2 * 3
+== code ==
+0000    1 OP_CONSTANT         0 '1'
+0002    | OP_CONSTANT         1 '2'
+0004    | OP_CONSTANT         2 '3'
+0006    | OP_MULTIPLY
+0007    | OP_ADD
+0008    | OP_RETURN
+...
 ```
 
 ## Testing
@@ -66,16 +87,28 @@ print 1 + 2;      // expect: 3
 ```
 
 `tests/run_tests.py` runs each `.lox` file and checks stdout, stderr and the
-exit code against those comments. Official tests are added to `tests/lox/`
-as each milestone starts passing them.
+exit code against those comments. There are four kinds of tests:
+
+| Where | What |
+|---|---|
+| `tests/lox/` | official tests from the book's repo, added once clox passes them |
+| `tests/custom/` | our own `.lox` tests for what the official suite can't reach yet |
+| `tests/unit/` | C unit tests for the chunk, the VM stack and the scanner |
+| `tests/cli_test.sh` | the REPL and the exit codes |
 
 ## Project layout
 
 ```
-src/          the interpreter (chunk, value, memory, debug, vm, main)
-tests/unit/   C unit tests for internal data structures
-tests/lox/    official Lox test scripts
-tests/run_tests.py
+src/
+  scanner.c    source text -> tokens, one at a time, on demand
+  compiler.c   tokens -> bytecode (single-pass Pratt parser)
+  vm.c         runs bytecode on a value stack
+  chunk.c      a bytecode array + line numbers + constants
+  value.c      Lox values (just numbers for now)
+  memory.c     every allocation goes through reallocate()
+  debug.c      the disassembler
+  main.c       REPL and file runner
+tests/         see the table above
 ```
 
 ## License

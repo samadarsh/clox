@@ -43,12 +43,18 @@ When a milestone is done, tick its checkbox in README.md.
 ## Layout
 
 ```
-src/            interpreter source, one .c/.h pair per book module
-tests/unit/     C unit tests for internal data structures
-tests/golden/   expected output for milestone 1's hand-built chunk (until ch. 16)
-tests/lox/      official .lox tests, mirroring upstream test/ paths
+src/                interpreter source, one .c/.h pair per book module
+tests/unit/         C unit tests (chunk, VM stack, scanner)
+tests/lox/          official .lox tests, mirroring upstream test/ paths
+tests/custom/       our own .lox tests (see tests/custom/README.md)
+tests/cli_test.sh   REPL and exit-code tests
 tests/run_tests.py  runner for "// expect: ..." style tests (same rules as test.dart)
+compile_flags.txt   tells the editor's clangd where the headers are
 ```
+
+To find which official tests a chapter should pass, read the `c("chapNN_...")`
+entries in upstream `tool/bin/test.dart`. Then run the whole upstream suite
+against the build to see what actually passes.
 
 ## Commands
 

@@ -1,0 +1,3 @@
+// Unary minus applies to 2 only: (-2) * 3.
+-2 * 3
+// expect: -6
