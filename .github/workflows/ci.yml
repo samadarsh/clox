@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    env:
+      ASAN_OPTIONS: abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: print_stacktrace=1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Some Linux runner kernels use more address randomization than older
+      # AddressSanitizer runtimes can handle, which makes ASan hang at startup.
+      # Lowering it is the documented workaround and does no harm elsewhere.
+      - name: Fix ASan on Linux
+        if: runner.os == 'Linux'
+        run: sudo sysctl vm.mmap_rnd_bits=28
+
+      - name: Toolchain
+        run: clang --version && python3 --version
+
+      - name: Build (release, -Werror)
+        run: make build
+
+      - name: Test (release)
+        run: make test
+
+      - name: Test (AddressSanitizer + UndefinedBehaviorSanitizer)
+        run: make test-asan

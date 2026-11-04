@@ -1,0 +1,14 @@
+# Build output
+build/
+*.o
+*.d
+*.dSYM/
+
+# Python
+__pycache__/
+
+# Editors and OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
