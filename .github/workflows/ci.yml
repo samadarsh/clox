@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Adds a "Run workflow" button on GitHub, for re-running CI by hand (for
+  # example when a GitHub outage drops the push event that normally starts it).
+  workflow_dispatch:
 
 jobs:
   test:
