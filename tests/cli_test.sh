@@ -62,6 +62,12 @@ printf '1 +' > "$TMP/bad.lox"
 echo "\"$CLOX\" \"$TMP/bad.lox\"" > "$TMP/cmd"
 check "compile error exits 65" 65 "" "[line 1] Error at end: Expect expression."
 
+# Runtime error in a file: message, then the line, exit 70.
+printf '1 +\n"a"\n' > "$TMP/rt.lox"
+echo "\"$CLOX\" \"$TMP/rt.lox\"" > "$TMP/cmd"
+check "runtime error exits 70" 70 "" \
+  "Operands must be two numbers or two strings.${nl}[line 2] in script"
+
 # Missing file: exit 74.
 echo "\"$CLOX\" \"$TMP/does-not-exist.lox\"" > "$TMP/cmd"
 check "missing file exits 74" 74 "" "Could not open file \"$TMP/does-not-exist.lox\"."

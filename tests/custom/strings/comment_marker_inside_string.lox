@@ -1,0 +1,3 @@
+// "//" inside a string is just text, not a comment.
+"a // b"
+// expect: a // b

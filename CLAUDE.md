@@ -44,7 +44,7 @@ When a milestone is done, tick its checkbox in README.md.
 
 ```
 src/                interpreter source, one .c/.h pair per book module
-tests/unit/         C unit tests (chunk, VM stack, scanner)
+tests/unit/         C unit tests (chunk, VM stack, scanner, values/objects)
 tests/lox/          official .lox tests, mirroring upstream test/ paths
 tests/custom/       our own .lox tests (see tests/custom/README.md)
 tests/cli_test.sh   REPL and exit-code tests
@@ -73,6 +73,11 @@ python3 tests/run_tests.py build/debug/clox tests/lox/<dir>   # one suite
 - C99, clang, `-Wall -Wextra -Werror`. The code must also build on Linux, which
   CI checks on ubuntu-latest and macos-latest.
 - All heap memory goes through `reallocate()` in `memory.c`, as in the book.
+- Every heap object must be linked into `vm.objects` (`allocateObject` does
+  this) so `freeVM()` and, later, the GC can find it. Unit tests that create
+  objects end with `freeVM(); initVM();`: clearing the list head makes any
+  object freeVM missed unreachable, so LeakSanitizer reports it on Linux.
+  (LeakSanitizer doesn't run on macOS, so leak checks happen in Linux CI.)
 - Debug flags (`DEBUG_TRACE_EXECUTION`, later `DEBUG_PRINT_CODE`,
   `DEBUG_STRESS_GC`, `DEBUG_LOG_GC`) are switched on with `-D` from the Makefile,
   not by editing `common.h`, so normal builds and tests stay clean.

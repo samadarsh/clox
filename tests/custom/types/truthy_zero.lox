@@ -1,0 +1,3 @@
+// Unlike C, 0 is truthy: only nil and false are falsey.
+!0
+// expect: false

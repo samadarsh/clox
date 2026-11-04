@@ -11,6 +11,7 @@ typedef struct {
   uint8_t* ip;            // "instruction pointer": the next byte to run
   Value stack[STACK_MAX]; // the value stack
   Value* stackTop;        // points one past the top item (the next free slot)
+  Obj* objects;           // head of the linked list of every heap object
 } VM;
 
 typedef enum {
@@ -18,6 +19,10 @@ typedef enum {
   INTERPRET_COMPILE_ERROR,
   INTERPRET_RUNTIME_ERROR
 } InterpretResult;
+
+// The one global VM, defined in vm.c. `extern` lets other files (object.c,
+// memory.c) use it.
+extern VM vm;
 
 void initVM(void);
 void freeVM(void);

@@ -11,6 +11,7 @@ A test is added only once clox passes it.
 | Milestone | Added |
 |---|---|
 | 2 | `expressions/evaluate.lox`, `number/leading_dot.lox`, `string/unterminated.lox` |
+| 3 | none: upstream's runner lists only `evaluate.lox` for chapters 18–19. The `operator/` type-error tests need `;` (chapter 21), so they're ported to `tests/custom/runtime_error/` for now |
 
 Most official tests use `print` and statements, which arrive in chapter 21
 (milestone 4). Until then, only these three pass.

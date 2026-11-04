@@ -1,0 +1,3 @@
+// Ported from upstream test/operator/add_bool_num.lox with the trailing ';' removed,
+// because statements arrive in chapter 21. Delete when the official file passes.
+true + 123 // expect runtime error: Operands must be two numbers or two strings.

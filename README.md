@@ -16,7 +16,7 @@ macOS.
 
 - [x] **1. Bytecode and VM**: chunks, a disassembler and a stack-based VM (ch. 14–15)
 - [x] **2. Scanner and compiler**: scan and compile expressions with a Pratt parser (ch. 16–17)
-- [ ] **3. Types and strings**: booleans, nil and heap-allocated strings (ch. 18–19)
+- [x] **3. Types and strings**: booleans, nil and heap-allocated strings (ch. 18–19)
 - [ ] **4. Hash tables and variables**: global and local variables (ch. 20–22)
 - [ ] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
 - [ ] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
@@ -41,16 +41,20 @@ make trace        # debug build that prints every instruction as it runs
 ./build/release/clox script.lox   # run a file
 ```
 
-So far (milestone 2), a program is a single arithmetic expression, and clox
-prints its value. Statements and `print` arrive in milestone 4.
+So far (milestone 3), a program is a single expression, and clox prints its
+value. Values can be numbers, booleans, `nil` and strings. Statements and
+`print` arrive in milestone 4.
 
 ```
 > 1 + 2 * 3
 7
-> -(5 - (3 - 1)) / 2
--1.5
-> (1 + 2
-[line 2] Error at end: Expect ')' after expression.
+> "con" + "cat"
+concat
+> !nil == (1 < 2)
+true
+> 1 + "a"
+Operands must be two numbers or two strings.
+[line 1] in script
 ```
 
 Exit codes follow the book: `65` compile error, `70` runtime error,
@@ -93,7 +97,7 @@ exit code against those comments. There are four kinds of tests:
 |---|---|
 | `tests/lox/` | official tests from the book's repo, added once clox passes them |
 | `tests/custom/` | our own `.lox` tests for what the official suite can't reach yet |
-| `tests/unit/` | C unit tests for the chunk, the VM stack and the scanner |
+| `tests/unit/` | C unit tests: chunk, VM stack, scanner, values and heap objects |
 | `tests/cli_test.sh` | the REPL and the exit codes |
 
 ## Project layout
@@ -104,7 +108,8 @@ src/
   compiler.c   tokens -> bytecode (single-pass Pratt parser)
   vm.c         runs bytecode on a value stack
   chunk.c      a bytecode array + line numbers + constants
-  value.c      Lox values (just numbers for now)
+  value.c      Lox values: a tagged union of bool, nil, number, object
+  object.c     heap objects (strings), all linked into vm.objects
   memory.c     every allocation goes through reallocate()
   debug.c      the disassembler
   main.c       REPL and file runner

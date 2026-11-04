@@ -1,0 +1,3 @@
+// From upstream precedence.lox: < binds tighter than ==, so false == (2 < 1).
+false == 2 < 1
+// expect: true

@@ -62,16 +62,16 @@ static void testAddConstantReturnsIndex(void) {
   Chunk chunk;
   initChunk(&chunk);
 
-  CHECK(addConstant(&chunk, 1.2) == 0);
-  CHECK(addConstant(&chunk, 3.4) == 1);
+  CHECK(addConstant(&chunk, NUMBER_VAL(1.2)) == 0);
+  CHECK(addConstant(&chunk, NUMBER_VAL(3.4)) == 1);
   for (int i = 2; i < 100; i++) {
-    CHECK(addConstant(&chunk, (double)i) == i);
+    CHECK(addConstant(&chunk, NUMBER_VAL((double)i)) == i);
   }
 
   CHECK(chunk.constants.count == 100);
-  CHECK(chunk.constants.values[0] == 1.2);
-  CHECK(chunk.constants.values[1] == 3.4);
-  CHECK(chunk.constants.values[99] == 99.0);
+  CHECK(AS_NUMBER(chunk.constants.values[0]) == 1.2);
+  CHECK(AS_NUMBER(chunk.constants.values[1]) == 3.4);
+  CHECK(AS_NUMBER(chunk.constants.values[99]) == 99.0);
 
   freeChunk(&chunk);
   CHECK(chunk.constants.count == 0);
@@ -80,14 +80,14 @@ static void testAddConstantReturnsIndex(void) {
 
 static void testStackIsLastInFirstOut(void) {
   initVM();
-  push(1.0);
-  push(2.0);
-  push(3.0);
-  CHECK(pop() == 3.0);
-  CHECK(pop() == 2.0);
-  push(4.0);
-  CHECK(pop() == 4.0);
-  CHECK(pop() == 1.0);
+  push(NUMBER_VAL(1.0));
+  push(NUMBER_VAL(2.0));
+  push(NUMBER_VAL(3.0));
+  CHECK(AS_NUMBER(pop()) == 3.0);
+  CHECK(AS_NUMBER(pop()) == 2.0);
+  push(NUMBER_VAL(4.0));
+  CHECK(AS_NUMBER(pop()) == 4.0);
+  CHECK(AS_NUMBER(pop()) == 1.0);
   freeVM();
 }
 

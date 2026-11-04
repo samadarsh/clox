@@ -1,0 +1,3 @@
+// Same start, different length.
+"ab" == "abc"
+// expect: false

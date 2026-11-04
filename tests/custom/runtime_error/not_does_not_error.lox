@@ -1,0 +1,3 @@
+// ! works on any value; it never raises a type error.
+!"a"
+// expect: false

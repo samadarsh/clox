@@ -1,0 +1,3 @@
+// Two different string objects with the same characters are equal.
+"ab" == "a" + "b"
+// expect: true

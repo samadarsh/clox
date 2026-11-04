@@ -7,10 +7,17 @@
 // Each instruction starts with a one-byte operation code ("opcode").
 typedef enum {
   OP_CONSTANT,  // operand: 1-byte index into the constant pool
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,
+  OP_EQUAL,
+  OP_GREATER,
+  OP_LESS,
   OP_ADD,
   OP_SUBTRACT,
   OP_MULTIPLY,
   OP_DIVIDE,
+  OP_NOT,
   OP_NEGATE,
   OP_RETURN,
 } OpCode;

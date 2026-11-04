@@ -1,8 +1,12 @@
+#include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "object.h"
+#include "memory.h"
 #include "vm.h"
 
 // A single global VM, as in the book. It keeps the code short; a real
@@ -13,11 +17,28 @@ static void resetStack(void) {
   vm.stackTop = vm.stack;
 }
 
-void initVM(void) {
+// Prints a runtime error, then which line it happened on, then clears the stack.
+static void runtimeError(const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  // ip already points past the failing instruction, hence the - 1.
+  size_t instruction = vm.ip - vm.chunk->code - 1;
+  int line = vm.chunk->lines[instruction];
+  fprintf(stderr, "[line %d] in script\n", line);
   resetStack();
 }
 
+void initVM(void) {
+  resetStack();
+  vm.objects = NULL;
+}
+
 void freeVM(void) {
+  freeObjects();
 }
 
 void push(Value value) {
@@ -30,15 +51,50 @@ Value pop(void) {
   return *vm.stackTop;
 }
 
+// Look at a value without popping it. distance 0 is the top of the stack.
+// Type checks peek first, so the operands are still on the stack if we stop
+// with an error.
+static Value peek(int distance) {
+  return vm.stackTop[-1 - distance];
+}
+
+// Lox's rule: nil and false are falsey; every other value is truthy,
+// including 0 and "".
+static bool isFalsey(Value value) {
+  return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+static void concatenate(void) {
+  ObjString* b = AS_STRING(pop());
+  ObjString* a = AS_STRING(pop());
+
+  int length = a->length + b->length;
+  char* chars = ALLOCATE(char, length + 1);
+  memcpy(chars, a->chars, a->length);
+  memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+
+  // takeString, not copyString: `chars` is already a fresh heap array, so the
+  // new string can own it directly without another copy.
+  ObjString* result = takeString(chars, length);
+  push(OBJ_VAL(result));
+}
+
 static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
-// Pop b first: the right operand was pushed last, so it is on top.
-#define BINARY_OP(op) \
+// Check both operands are numbers, then pop b first: the right operand was
+// pushed last, so it is on top. valueType wraps the result (NUMBER_VAL for
+// arithmetic, BOOL_VAL for comparisons).
+#define BINARY_OP(valueType, op) \
     do { \
-      double b = pop(); \
-      double a = pop(); \
-      push(a op b); \
+      if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
+        runtimeError("Operands must be numbers."); \
+        return INTERPRET_RUNTIME_ERROR; \
+      } \
+      double b = AS_NUMBER(pop()); \
+      double a = AS_NUMBER(pop()); \
+      push(valueType(a op b)); \
     } while (false)
 
   for (;;) {
@@ -60,11 +116,44 @@ static InterpretResult run(void) {
         push(constant);
         break;
       }
-      case OP_ADD:      BINARY_OP(+); break;
-      case OP_SUBTRACT: BINARY_OP(-); break;
-      case OP_MULTIPLY: BINARY_OP(*); break;
-      case OP_DIVIDE:   BINARY_OP(/); break;
-      case OP_NEGATE:   push(-pop()); break;
+      case OP_NIL:      push(NIL_VAL); break;
+      case OP_TRUE:     push(BOOL_VAL(true)); break;
+      case OP_FALSE:    push(BOOL_VAL(false)); break;
+      case OP_EQUAL: {
+        Value b = pop();
+        Value a = pop();
+        push(BOOL_VAL(valuesEqual(a, b)));
+        break;
+      }
+      case OP_GREATER:  BINARY_OP(BOOL_VAL, >); break;
+      case OP_LESS:     BINARY_OP(BOOL_VAL, <); break;
+      case OP_ADD: {
+        if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+          concatenate();
+        } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+          double b = AS_NUMBER(pop());
+          double a = AS_NUMBER(pop());
+          push(NUMBER_VAL(a + b));
+        } else {
+          runtimeError(
+              "Operands must be two numbers or two strings.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
+      case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
+      case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
+      case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
+      case OP_NOT:
+        push(BOOL_VAL(isFalsey(pop())));
+        break;
+      case OP_NEGATE:
+        if (!IS_NUMBER(peek(0))) {
+          runtimeError("Operand must be a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(NUMBER_VAL(-AS_NUMBER(pop())));
+        break;
       case OP_RETURN: {
         printValue(pop());
         printf("\n");
@@ -80,7 +169,8 @@ static InterpretResult run(void) {
 
 InterpretResult interpret(const char* source) {
   // The chunk lives on this function's stack frame, but its arrays are on the
-  // heap, so it must be freed on every path out of here.
+  // heap, so it must be freed on every path out of here. (Strings it created
+  // are owned by vm.objects and freed in freeVM, not here.)
   Chunk chunk;
   initChunk(&chunk);
 
