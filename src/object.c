@@ -10,9 +10,9 @@
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
 
-// Allocates `size` bytes (the whole ObjString, not just its Obj header),
-// fills in the header, and pushes the object onto the front of vm.objects
-// so the VM can find it again to free it.
+// Allocates `size` bytes (the whole object, not just its Obj header), fills
+// in the header, and pushes the object onto the front of vm.objects so the
+// VM can find it again to free it.
 static Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
@@ -20,6 +20,37 @@ static Obj* allocateObject(size_t size, ObjType type) {
   object->next = vm.objects;
   vm.objects = object;
   return object;
+}
+
+ObjClosure* newClosure(ObjFunction* function) {
+  // The array is filled in by OP_CLOSURE right after this returns. Start with
+  // NULLs so it never holds garbage pointers in between.
+  ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*,
+                                   function->upvalueCount);
+  for (int i = 0; i < function->upvalueCount; i++) {
+    upvalues[i] = NULL;
+  }
+
+  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+  closure->function = function;
+  closure->upvalues = upvalues;
+  closure->upvalueCount = function->upvalueCount;
+  return closure;
+}
+
+ObjFunction* newFunction(void) {
+  ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
+  function->arity = 0;
+  function->upvalueCount = 0;
+  function->name = NULL;
+  initChunk(&function->chunk);
+  return function;
+}
+
+ObjNative* newNative(NativeFn function) {
+  ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+  native->function = function;
+  return native;
 }
 
 static ObjString* allocateString(char* chars, int length,
@@ -76,10 +107,39 @@ ObjString* copyString(const char* chars, int length) {
   return allocateString(heapChars, length, hash);
 }
 
+ObjUpvalue* newUpvalue(Value* slot) {
+  ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+  upvalue->closed = NIL_VAL;
+  upvalue->location = slot;   // open: points into the VM stack
+  upvalue->next = NULL;
+  return upvalue;
+}
+
+static void printFunction(ObjFunction* function) {
+  if (function->name == NULL) {
+    printf("<script>");
+    return;
+  }
+  printf("<fn %s>", function->name->chars);
+}
+
 void printObject(Value value) {
   switch (OBJ_TYPE(value)) {
+    case OBJ_CLOSURE:
+      printFunction(AS_CLOSURE(value)->function);
+      break;
+    case OBJ_FUNCTION:
+      printFunction(AS_FUNCTION(value));
+      break;
+    case OBJ_NATIVE:
+      printf("<native fn>");
+      break;
     case OBJ_STRING:
       printf("%s", AS_CSTRING(value));
+      break;
+    case OBJ_UPVALUE:
+      // Upvalues are never visible to Lox code; this is only for debugging.
+      printf("upvalue");
       break;
   }
 }

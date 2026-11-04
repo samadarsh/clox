@@ -1,0 +1,8 @@
+// FRAMES_MAX is 64 and the top-level script uses one frame, so 63 nested
+// calls fit: depth(62) calls itself down to depth(0), 63 calls in all.
+// stack_overflow.lox shows one more call failing.
+fun depth(n) {
+  if (n == 0) return 0;
+  return depth(n - 1) + 1;
+}
+print depth(62); // expect: 62

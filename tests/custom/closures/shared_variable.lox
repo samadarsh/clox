@@ -1,0 +1,18 @@
+// Two closures that capture the same variable must share it, even after the
+// function that declared it has returned.
+var getter;
+var setter;
+fun make() {
+  var shared = "initial";
+  fun get() { return shared; }
+  fun set(value) { shared = value; }
+  getter = get;
+  setter = set;
+
+  set("set while make() runs");   // the upvalue is still open here
+  print get(); // expect: set while make() runs
+}
+make();
+print getter(); // expect: set while make() runs
+setter("set after make() returned"); // closed now: both use one ObjUpvalue
+print getter(); // expect: set after make() returned

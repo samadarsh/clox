@@ -1,0 +1,8 @@
+fun nothing() {}
+fun early(flag) {
+  if (flag) return;
+  return "late";
+}
+print nothing();    // expect: nil
+print early(true);  // expect: nil
+print early(false); // expect: late

@@ -84,6 +84,36 @@ check "missing file exits 74" 74 "" "Could not open file \"$TMP/does-not-exist.l
 echo "\"$CLOX\" a b" > "$TMP/cmd"
 check "too many arguments exits 64" 64 "" "Usage: clox [path]"
 
+# A runtime error deep in a call chain prints one stack trace line per frame,
+# innermost first, each with the line that frame was executing.
+cat > "$TMP/trace.lox" <<'EOF'
+fun outer() { middle(); }
+fun middle() {
+  inner();
+}
+fun inner() {
+  var x = 1;
+  return x + "!";
+}
+outer();
+EOF
+echo "\"$CLOX\" \"$TMP/trace.lox\"" > "$TMP/cmd"
+check "stack trace lists every frame" 70 "" \
+  "Operands must be two numbers or two strings.${nl}[line 7] in inner()${nl}[line 3] in middle()${nl}[line 1] in outer()${nl}[line 9] in script"
+
+# A wrong argument count is reported before the callee starts, so the
+# innermost frame in the trace is the caller.
+cat > "$TMP/arity.lox" <<'EOF'
+fun takesTwo(a, b) {}
+fun caller() {
+  takesTwo(1);
+}
+caller();
+EOF
+echo "\"$CLOX\" \"$TMP/arity.lox\"" > "$TMP/cmd"
+check "arity error is reported in the caller" 70 "" \
+  "Expected 2 arguments but got 1.${nl}[line 3] in caller()${nl}[line 5] in script"
+
 # The 16-bit limit on forward jumps. Each "nil;" compiles to 2 bytes
 # (OP_NIL, OP_POP), and the jump over the then-branch also crosses its OP_POP
 # (1 byte) and the OP_JUMP over the else-branch (3 bytes): 2n + 4 bytes.

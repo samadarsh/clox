@@ -1,0 +1,13 @@
+// Globals are looked up when called, so isEven can call isOdd before
+// isOdd is declared.
+fun isEven(n) {
+  if (n == 0) return true;
+  return isOdd(n - 1);
+}
+fun isOdd(n) {
+  if (n == 0) return false;
+  return isEven(n - 1);
+}
+print isEven(10); // expect: true
+print isOdd(7);   // expect: true
+print isEven(7);  // expect: false

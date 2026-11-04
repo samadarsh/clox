@@ -1,0 +1,25 @@
+// In clox the for loop has ONE `i` for the whole loop (unlike `let` in
+// JavaScript). A `var` declared inside the body is new on every iteration.
+var f1;
+var f2;
+var f3;
+for (var i = 1; i <= 3; i = i + 1) {
+  var copy = i;
+  fun show() {
+    print i;
+    print copy;
+  }
+  if (i == 1) f1 = show;
+  else if (i == 2) f2 = show;
+  else f3 = show;
+}
+// All three see the shared `i` with its final value (4). Each sees its own copy.
+f1();
+// expect: 4
+// expect: 1
+f2();
+// expect: 4
+// expect: 2
+f3();
+// expect: 4
+// expect: 3

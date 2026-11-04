@@ -1,0 +1,15 @@
+// inner() uses a variable from two functions out: middle() captures it from
+// outer(), and inner() captures it from middle().
+fun outer() {
+  var x = "from outer";
+  fun middle() {
+    fun inner() {
+      print x;
+    }
+    return inner;
+  }
+  return middle;
+}
+var mid = outer();
+var innermost = mid();
+innermost(); // expect: from outer

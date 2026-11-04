@@ -1,0 +1,6 @@
+print clock;              // expect: <native fn>
+var start = clock();
+print start >= 0;         // expect: true
+var spin = 0;
+while (spin < 10000) spin = spin + 1;
+print clock() >= start;   // expect: true

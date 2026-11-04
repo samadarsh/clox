@@ -1,0 +1,8 @@
+fun twice(f, x) { return f(f(x)); }
+fun addThree(n) { return n + 3; }
+print twice(addThree, 10); // expect: 16
+
+var alias = addThree;
+print alias(1); // expect: 4
+print alias;    // expect: <fn addThree>
+print twice;    // expect: <fn twice>

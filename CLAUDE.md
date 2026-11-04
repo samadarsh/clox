@@ -77,9 +77,13 @@ python3 tests/run_tests.py build/debug/clox tests/lox/<dir>   # one suite
 - All heap memory goes through `reallocate()` in `memory.c`, as in the book.
 - Every heap object must be linked into `vm.objects` (`allocateObject` does
   this) so `freeVM()` and, later, the GC can find it. Unit tests that create
-  objects end with `freeVM(); initVM();`: clearing the list head makes any
-  object freeVM missed unreachable, so LeakSanitizer reports it on Linux.
-  (LeakSanitizer doesn't run on macOS, so leak checks happen in Linux CI.)
+  objects start with `initVM()` and end with `endTest()` (test_object.c): it
+  frees everything, then clears the VM's pointers *without allocating*, so any
+  object freeVM missed is unreachable and LeakSanitizer reports it. Don't end
+  a test with `initVM()`: since chapter 24 it allocates (the `clock` native).
+- LeakSanitizer doesn't run on macOS. Before asking to commit a milestone
+  that touches memory, run `make test-asan` in a Linux container (Ubuntu with
+  clang, make and python3), not only on the Mac.
 - Debug flags (`DEBUG_TRACE_EXECUTION`, later `DEBUG_PRINT_CODE`,
   `DEBUG_STRESS_GC`, `DEBUG_LOG_GC`) are switched on with `-D` from the Makefile,
   not by editing `common.h`, so normal builds and tests stay clean.

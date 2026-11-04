@@ -1,0 +1,5 @@
+// Unbounded recursion stops with an error instead of crashing the VM.
+fun forever() {
+  forever(); // expect runtime error: Stack overflow.
+}
+forever();

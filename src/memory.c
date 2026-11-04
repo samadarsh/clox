@@ -21,6 +21,25 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 
 static void freeObject(Obj* object) {
   switch (object->type) {
+    case OBJ_CLOSURE: {
+      // Free the array of upvalue pointers, but not the upvalues themselves:
+      // other closures may share them, and they are objects in vm.objects,
+      // so they get freed on their own.
+      ObjClosure* closure = (ObjClosure*)object;
+      FREE_ARRAY(ObjUpvalue*, closure->upvalues,
+                 closure->upvalueCount);
+      FREE(ObjClosure, object);
+      break;
+    }
+    case OBJ_FUNCTION: {
+      ObjFunction* function = (ObjFunction*)object;
+      freeChunk(&function->chunk);
+      FREE(ObjFunction, object);
+      break;
+    }
+    case OBJ_NATIVE:
+      FREE(ObjNative, object);
+      break;
     case OBJ_STRING: {
       // Free what the object owns (its characters) before the object itself,
       // because once it is freed we must not read string->chars any more.
@@ -29,6 +48,10 @@ static void freeObject(Obj* object) {
       FREE(ObjString, object);
       break;
     }
+    case OBJ_UPVALUE:
+      // An upvalue doesn't own the variable it points at.
+      FREE(ObjUpvalue, object);
+      break;
   }
 }
 

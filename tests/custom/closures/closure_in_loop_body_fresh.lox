@@ -1,0 +1,12 @@
+// A function declared in a while loop body captures that iteration's variable.
+var first;
+var second;
+var n = 0;
+while (n < 2) {
+  var label = n;
+  fun get() { return label; }
+  if (n == 0) first = get; else second = get;
+  n = n + 1;
+}
+print first();  // expect: 0
+print second(); // expect: 1

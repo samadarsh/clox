@@ -4,8 +4,8 @@
 #include "object.h"
 #include "vm.h"
 
-// Compiles `source` into bytecode, appending it to `chunk`.
-// Returns false if there was a compile error (already reported on stderr).
-bool compile(const char* source, Chunk* chunk);
+// Compiles `source` into a function representing the top-level script.
+// Returns NULL if there was a compile error (already reported on stderr).
+ObjFunction* compile(const char* source);
 
 #endif

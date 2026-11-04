@@ -1,0 +1,17 @@
+// The example from the milestone 6 walkthrough.
+fun makeCounter() {
+  var count = 0;
+  fun inc() {
+    count = count + 1;
+    print count;
+  }
+  return inc;
+}
+var c = makeCounter();
+c(); // expect: 1
+c(); // expect: 2
+
+// Each call to makeCounter creates a new `count`, so counters are independent.
+var d = makeCounter();
+d(); // expect: 1
+c(); // expect: 3

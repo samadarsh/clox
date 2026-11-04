@@ -1,0 +1,15 @@
+// A closure keeps a block-local variable alive after the block ends.
+var saved;
+{
+  var local = "kept alive";
+  fun show() { print local; }
+  saved = show;
+}
+saved(); // expect: kept alive
+
+// A new block reuses the same stack slot. If `local` had not been moved off
+// the stack (closed) when its block ended, saved() would now see "different".
+{
+  var other = "different";
+  saved(); // expect: kept alive
+}

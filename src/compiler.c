@@ -49,25 +49,47 @@ typedef struct {
 // A local variable, as the compiler sees it. At runtime locals have no names:
 // the compiler turns each use into a stack slot number.
 typedef struct {
-  Token name;   // points into the source text, like every token
-  int depth;    // scope depth where declared; -1 = declared but not yet initialized
+  Token name;       // points into the source text, like every token
+  int depth;        // scope depth where declared; -1 = declared but not yet initialized
+  bool isCaptured;  // does some closure capture this variable?
 } Local;
 
-// The compiler's view of the stack. locals[i] is the variable that will sit in
-// stack slot i at runtime, because locals are pushed in declaration order and
-// popped in reverse, exactly like the stack itself.
+// How a closure finds one captured variable when it is created (OP_CLOSURE).
 typedef struct {
+  uint8_t index;  // isLocal: the enclosing function's local slot
+                  // otherwise: an index into the enclosing function's upvalues
+  bool isLocal;
+} Upvalue;
+
+typedef enum {
+  TYPE_FUNCTION,
+  TYPE_SCRIPT
+} FunctionType;
+
+// One Compiler per function being compiled. Nested function declarations
+// create nested Compilers, linked through `enclosing`, so the compiler can
+// look outwards when resolving a name.
+//
+// locals[i] is the variable that will sit in slot i of this function's stack
+// window at runtime, because locals are pushed in declaration order and
+// popped in reverse, exactly like the stack itself.
+typedef struct Compiler {
+  struct Compiler* enclosing;
+  ObjFunction* function;  // the function whose bytecode we're writing
+  FunctionType type;
+
   Local locals[UINT8_COUNT];
   int localCount;   // how many locals are currently in scope
-  int scopeDepth;   // 0 = global scope, 1 = first { block }, 2 = nested, ...
+  Upvalue upvalues[UINT8_COUNT];
+  int scopeDepth;   // 0 = top level of the function, 1 = first { block }, ...
 } Compiler;
 
 Parser parser;
 Compiler* current = NULL;
-Chunk* compilingChunk;
 
+// Each function has its own chunk; we write into the current function's.
 static Chunk* currentChunk(void) {
-  return compilingChunk;
+  return &current->function->chunk;
 }
 
 static void errorAt(Token* token, const char* message) {
@@ -164,7 +186,9 @@ static int emitJump(uint8_t instruction) {
   return currentChunk()->count - 2;
 }
 
+// The implicit return at the end of every function body: return nil.
 static void emitReturn(void) {
+  emitByte(OP_NIL);
   emitByte(OP_RETURN);
 }
 
@@ -198,19 +222,43 @@ static void patchJump(int offset) {
   currentChunk()->code[offset + 1] = jump & 0xff;
 }
 
-static void initCompiler(Compiler* compiler) {
+static void initCompiler(Compiler* compiler, FunctionType type) {
+  compiler->enclosing = current;
+  compiler->function = NULL;
+  compiler->type = type;
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
+  compiler->function = newFunction();
   current = compiler;
+  if (type != TYPE_SCRIPT) {
+    // The function's name was the token just consumed. Copy it: the source
+    // text goes away after compiling, but the function lives on.
+    current->function->name = copyString(parser.previous.start,
+                                         parser.previous.length);
+  }
+
+  // Slot 0 of every frame holds the function being called. Claim it here
+  // with an empty name, so user code can never refer to it.
+  Local* local = &current->locals[current->localCount++];
+  local->depth = 0;
+  local->isCaptured = false;
+  local->name.start = "";
+  local->name.length = 0;
 }
 
-static void endCompiler(void) {
+static ObjFunction* endCompiler(void) {
   emitReturn();
+  ObjFunction* function = current->function;
 #ifdef DEBUG_PRINT_CODE
   if (!parser.hadError) {
-    disassembleChunk(currentChunk(), "code");
+    disassembleChunk(currentChunk(), function->name != NULL
+        ? function->name->chars : "<script>");
   }
 #endif
+
+  // Back to the enclosing function's compiler.
+  current = current->enclosing;
+  return function;
 }
 
 static void beginScope(void) {
@@ -220,12 +268,18 @@ static void beginScope(void) {
 static void endScope(void) {
   current->scopeDepth--;
 
-  // Forget the locals declared in the scope we just left, and emit a POP for
-  // each one, so the runtime stack shrinks exactly as the compiler's list did.
+  // Forget the locals declared in the scope we just left, and emit an
+  // instruction for each one so the runtime stack shrinks exactly as the
+  // compiler's list did. A captured local must first be moved into its
+  // upvalue (OP_CLOSE_UPVALUE), because a closure may outlive this block.
   while (current->localCount > 0 &&
          current->locals[current->localCount - 1].depth >
             current->scopeDepth) {
-    emitByte(OP_POP);
+    if (current->locals[current->localCount - 1].isCaptured) {
+      emitByte(OP_CLOSE_UPVALUE);
+    } else {
+      emitByte(OP_POP);
+    }
     current->localCount--;
   }
 }
@@ -267,6 +321,52 @@ static int resolveLocal(Compiler* compiler, Token* name) {
   return -1;
 }
 
+// Adds a captured variable to `compiler`'s function, or returns the index it
+// already has, so a closure that uses a variable twice captures it once.
+static int addUpvalue(Compiler* compiler, uint8_t index,
+                      bool isLocal) {
+  int upvalueCount = compiler->function->upvalueCount;
+
+  for (int i = 0; i < upvalueCount; i++) {
+    Upvalue* upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->isLocal == isLocal) {
+      return i;
+    }
+  }
+
+  if (upvalueCount == UINT8_COUNT) {
+    error("Too many closure variables in function.");
+    return 0;
+  }
+
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = index;
+  return compiler->function->upvalueCount++;
+}
+
+// Looks for `name` in the functions enclosing this one. Returns this
+// function's upvalue index for it, or -1 if it's not found (so it's a global).
+static int resolveUpvalue(Compiler* compiler, Token* name) {
+  if (compiler->enclosing == NULL) return -1;
+
+  // A local of the directly enclosing function: capture it straight from
+  // that function's stack window, and mark it so it gets closed later.
+  int local = resolveLocal(compiler->enclosing, name);
+  if (local != -1) {
+    compiler->enclosing->locals[local].isCaptured = true;
+    return addUpvalue(compiler, (uint8_t)local, true);
+  }
+
+  // Further out: make the enclosing function capture it first (recursively),
+  // then capture *its* upvalue. Each level passes the variable inwards.
+  int upvalue = resolveUpvalue(compiler->enclosing, name);
+  if (upvalue != -1) {
+    return addUpvalue(compiler, (uint8_t)upvalue, false);
+  }
+
+  return -1;
+}
+
 static void addLocal(Token name) {
   if (current->localCount == UINT8_COUNT) {
     // OP_GET_LOCAL's operand is one byte, so only 256 slots are addressable.
@@ -277,6 +377,7 @@ static void addLocal(Token name) {
   Local* local = &current->locals[current->localCount++];
   local->name = name;
   local->depth = -1;
+  local->isCaptured = false;
 }
 
 static void declareVariable(void) {
@@ -310,6 +411,8 @@ static uint8_t parseVariable(const char* errorMessage) {
 }
 
 static void markInitialized(void) {
+  // A top-level function declaration is a global: there's no local to mark.
+  if (current->scopeDepth == 0) return;
   current->locals[current->localCount - 1].depth =
       current->scopeDepth;
 }
@@ -323,6 +426,22 @@ static void defineVariable(uint8_t global) {
   }
 
   emitBytes(OP_DEFINE_GLOBAL, global);
+}
+
+// Compiles the arguments of a call, leaving each value on the stack in order.
+static uint8_t argumentList(void) {
+  uint8_t argCount = 0;
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      expression();
+      if (argCount == 255) {
+        error("Can't have more than 255 arguments.");
+      }
+      argCount++;
+    } while (match(TOKEN_COMMA));
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+  return argCount;
 }
 
 // `a and b`: the left operand is already on the stack. If it's falsey, that is
@@ -364,6 +483,13 @@ static void binary(bool canAssign) {
     case TOKEN_SLASH:         emitByte(OP_DIVIDE); break;
     default: return; // Unreachable.
   }
+}
+
+// '(' after an expression is a call: the callee is already on the stack.
+static void call(bool canAssign) {
+  (void)canAssign;
+  uint8_t argCount = argumentList();
+  emitBytes(OP_CALL, argCount);
 }
 
 static void literal(bool canAssign) {
@@ -420,6 +546,9 @@ static void namedVariable(Token name, bool canAssign) {
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
+  } else if ((arg = resolveUpvalue(current, &name)) != -1) {
+    getOp = OP_GET_UPVALUE;
+    setOp = OP_SET_UPVALUE;
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
@@ -455,7 +584,7 @@ static void unary(bool canAssign) {
 
 // The Pratt parser's table, indexed by token type.
 ParseRule rules[] = {
-  [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
+  [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
@@ -541,6 +670,51 @@ static void block(void) {
   }
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
+// Compiles a function's parameters and body with a fresh Compiler, then
+// emits OP_CLOSURE in the *enclosing* function to create it at runtime.
+static void function(FunctionType type) {
+  Compiler compiler;
+  initCompiler(&compiler, type);
+  beginScope();
+
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      current->function->arity++;
+      if (current->function->arity > 255) {
+        errorAtCurrent("Can't have more than 255 parameters.");
+      }
+      // Parameters are simply the function's first locals, in slots 1, 2, ...
+      uint8_t constant = parseVariable("Expect parameter name.");
+      defineVariable(constant);
+    } while (match(TOKEN_COMMA));
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
+  block();
+
+  // No endScope(): the whole frame is discarded on return, so popping each
+  // local first would be wasted work.
+  ObjFunction* function = endCompiler();
+  emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+
+  // After the function constant, one (isLocal, index) pair per captured
+  // variable, telling OP_CLOSURE where to find each one.
+  for (int i = 0; i < function->upvalueCount; i++) {
+    emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+    emitByte(compiler.upvalues[i].index);
+  }
+}
+
+static void funDeclaration(void) {
+  uint8_t global = parseVariable("Expect function name.");
+  // Mark it initialized *before* compiling the body, so the function can
+  // refer to itself: that's what makes recursion work for local functions.
+  markInitialized();
+  function(TYPE_FUNCTION);
+  defineVariable(global);
 }
 
 static void varDeclaration(void) {
@@ -683,6 +857,20 @@ static void synchronize(void) {
   }
 }
 
+static void returnStatement(void) {
+  if (current->type == TYPE_SCRIPT) {
+    error("Can't return from top-level code.");
+  }
+
+  if (match(TOKEN_SEMICOLON)) {
+    emitReturn();
+  } else {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
+    emitByte(OP_RETURN);
+  }
+}
+
 static void whileStatement(void) {
   int loopStart = currentChunk()->count;
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
@@ -699,7 +887,9 @@ static void whileStatement(void) {
 }
 
 static void declaration(void) {
-  if (match(TOKEN_VAR)) {
+  if (match(TOKEN_FUN)) {
+    funDeclaration();
+  } else if (match(TOKEN_VAR)) {
     varDeclaration();
   } else {
     statement();
@@ -715,6 +905,8 @@ static void statement(void) {
     forStatement();
   } else if (match(TOKEN_IF)) {
     ifStatement();
+  } else if (match(TOKEN_RETURN)) {
+    returnStatement();
   } else if (match(TOKEN_WHILE)) {
     whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
@@ -726,11 +918,11 @@ static void statement(void) {
   }
 }
 
-bool compile(const char* source, Chunk* chunk) {
+ObjFunction* compile(const char* source) {
   initScanner(source);
+  // The top-level code is compiled as an implicit function, the "script".
   Compiler compiler;
-  initCompiler(&compiler);
-  compilingChunk = chunk;
+  initCompiler(&compiler, TYPE_SCRIPT);
 
   parser.hadError = false;
   parser.panicMode = false;
@@ -741,6 +933,6 @@ bool compile(const char* source, Chunk* chunk) {
     declaration();
   }
 
-  endCompiler();
-  return !parser.hadError;
+  ObjFunction* function = endCompiler();
+  return parser.hadError ? NULL : function;
 }

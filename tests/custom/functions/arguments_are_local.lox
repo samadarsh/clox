@@ -1,0 +1,9 @@
+// Arguments land in the callee's own stack slots. Assigning to a parameter
+// changes only that slot, never the caller's variable.
+fun change(x) {
+  x = "changed";
+  return x;
+}
+var a = "original";
+print change(a); // expect: changed
+print a;         // expect: original

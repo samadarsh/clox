@@ -1,0 +1,6 @@
+fun takesTwo(a, b) { return a + b; }
+fun caller() {
+  // The error is reported in the caller, at the call: the callee never starts.
+  return takesTwo(1); // expect runtime error: Expected 2 arguments but got 1.
+}
+caller();

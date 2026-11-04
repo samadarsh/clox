@@ -1,0 +1,12 @@
+// A runtime error three calls deep. The first stack trace line must point
+// at the failing line inside the innermost function (line 9). The full trace
+// (every frame, with its line) is checked in tests/cli_test.sh.
+fun outer() { middle(); }
+fun middle() {
+  inner();
+}
+fun inner() {
+  var x = 1;
+  return x + "!"; // expect runtime error: Operands must be two numbers or two strings.
+}
+outer();

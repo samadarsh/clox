@@ -1,0 +1,3 @@
+fun makeString() { return "just a string"; }
+print makeString(); // expect: just a string
+makeString()(); // expect runtime error: Can only call functions and classes.

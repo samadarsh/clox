@@ -19,7 +19,7 @@ macOS.
 - [x] **3. Types and strings**: booleans, nil and heap-allocated strings (ch. 18–19)
 - [x] **4. Hash tables and variables**: global and local variables (ch. 20–22)
 - [x] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
-- [ ] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
+- [x] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
 - [ ] **7. Garbage collector**: mark-sweep with tri-color marking (ch. 26)
 - [ ] **8. Classes and inheritance**: instances, methods, initializers and `super` (ch. 27–29)
 - [ ] **9. Speed and polish**: optimization, benchmarks vs Python, a demo and a WebAssembly playground (ch. 30)
@@ -41,12 +41,31 @@ make trace        # debug build that prints every instruction as it runs
 ./build/release/clox script.lox   # run a file
 ```
 
-So far (milestone 5), clox runs statements: `print`, `var`, assignment,
-`{ }` blocks with local variables, `if`/`else`, `while` and `for`, with
-short-circuiting `and`/`or`. Values are numbers, booleans, `nil` and strings.
-Functions arrive in milestone 6. For a larger example (FizzBuzz, Fibonacci,
-nested loops), see
-[tests/custom/programs/control_flow_demo.lox](tests/custom/programs/control_flow_demo.lox).
+So far (milestone 6), clox runs everything in Lox except classes: variables,
+blocks, `if`/`else`, `while`, `for`, `and`/`or`, functions with `return`,
+recursion, closures, and the native function `clock()`. Classes arrive in
+milestone 8.
+
+```
+> fun makeCounter() { var count = 0; fun inc() { count = count + 1; print count; } return inc; }
+> var c = makeCounter();
+> c();
+1
+> c();
+2
+```
+
+Runtime errors print a stack trace, innermost call first:
+
+```
+Operands must be two numbers or two strings.
+[line 7] in inner()
+[line 3] in middle()
+[line 1] in outer()
+[line 9] in script
+```
+
+`bench/fib.lox` times recursive `fib(30)` (2.7 million calls) with `clock()`.
 
 ```
 > var greeting = "hello";
@@ -113,15 +132,17 @@ exit code against those comments. There are four kinds of tests:
 src/
   scanner.c    source text -> tokens, one at a time, on demand
   compiler.c   tokens -> bytecode (single-pass Pratt parser)
-  vm.c         runs bytecode on a value stack
+  vm.c         runs bytecode on a value stack, one CallFrame per active call
   chunk.c      a bytecode array + line numbers + constants
   value.c      Lox values: a tagged union of bool, nil, number, object
-  object.c     heap objects (strings, interned), all linked into vm.objects
+  object.c     heap objects: strings (interned), functions, closures, upvalues,
+               natives, all linked into vm.objects
   table.c      hash table: global variables and the string intern set
   memory.c     every allocation goes through reallocate()
   debug.c      the disassembler
   main.c       REPL and file runner
 tests/         see the table above
+bench/         benchmark programs (fib.lox)
 tools/         upstream_tests.py: which official tests a chapter should pass
 ```
 

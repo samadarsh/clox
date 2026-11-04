@@ -1,0 +1,7 @@
+// One call deeper than max_call_depth.lox: a 65th frame does not fit. The
+// error is reported in the innermost frame, at the call needing one more (line 5).
+fun depth(n) {
+  if (n == 0) return 0;
+  return depth(n - 1) + 1; // expect runtime error: Stack overflow.
+}
+print depth(63);

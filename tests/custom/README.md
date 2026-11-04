@@ -13,7 +13,13 @@ explanation.
 | `runtime_error/` | type errors upstream lacks (`1 + "a"`, `"a" < "b"`), error line numbers, execution stopping at the error |
 | `compile_error/` | missing `)`/`;`/`}`, "Expect expression.", panic mode, recovery at the next statement, invalid assignment target |
 | `control_flow/` | nested `if`/`else`, short-circuit `and`/`or` (the right side must not run), every `for` clause missing, zero-iteration loops, stack balance over 1000 iterations, jumps over more than 255 bytes |
+| `functions/` | recursion, mutual recursion, the exact call-depth limit (63 calls OK, 64 is "Stack overflow."), wrong argument counts, calling non-functions, errors in nested calls, functions as values, `clock()` |
+| `closures/` | the counter walkthrough, two closures sharing one variable, loop variable capture, closing at block end and at return, three-level capture |
 | `programs/` | longer programs using many features together |
+
+The full multi-frame stack trace (every frame and its line, not just the first)
+is checked in `tests/cli_test.sh`, since the `.lox` runner, like upstream's,
+only compares the first trace line.
 
 The 16-bit jump limit itself ("Too much code to jump over.", at exactly
 65,536 bytes) is tested in `tests/cli_test.sh`, which generates the ~130 KB

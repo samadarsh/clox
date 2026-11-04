@@ -3,9 +3,10 @@
 // Memory note: these tests rely on `make test-asan`. On Linux, AddressSanitizer
 // also runs LeakSanitizer when the program exits. LeakSanitizer reports memory
 // that is still allocated but no longer reachable from any pointer. Each test
-// ends with freeVM() and then initVM(), which sets vm.objects = NULL. If
-// freeVM() forgot to free an object, nothing points to it any more, so it is
-// reported as a leak and the test fails.
+// starts with initVM() and ends with endTest(), which frees everything and then
+// clears the VM's pointers (vm.objects, the tables). If freeVM() forgot to free
+// an object, nothing points to it any more, so it is reported as a leak and
+// the test fails.
 
 // dup/dup2 are POSIX, not C99, so ask the headers to declare them.
 #define _POSIX_C_SOURCE 200809L
@@ -54,6 +55,18 @@ static void unsilence(void) {
   dup2(savedErr, STDERR_FILENO);
   close(savedOut);
   close(savedErr);
+}
+
+// Ends a test. freeVM() releases everything; then the VM's pointers are
+// cleared WITHOUT allocating anything, so whatever freeVM() missed becomes
+// unreachable. (Calling initVM() here, as this file did before chapter 24,
+// now allocates the `clock` native, and the next test's initVM() would
+// overwrite and leak it.)
+static void endTest(void) {
+  freeVM();
+  vm.objects = NULL;
+  initTable(&vm.globals);
+  initTable(&vm.strings);
 }
 
 static int countObjects(void) {
@@ -106,19 +119,21 @@ static void testCopyStringOwnsItsCharacters(void) {
   source[0] = 'J';                          // changing the source...
   CHECK(s->chars[0] == 'h');               // ...does not change the string
 
-  freeVM();
-  initVM();  // drop the list head so anything left would show as a leak
+  endTest();
 }
 
 static void testCopyStringInterns(void) {
   initVM();
+  // initVM() itself creates objects (the "clock" name and native), so
+  // count relative to what's there after it.
+  int before = countObjects();
 
   ObjString* a = copyString("lox", 3);
   ObjString* b = copyString("lox", 3);
   ObjString* c = copyString("lo", 2);
   CHECK(a == b);               // same characters -> the very same object
   CHECK(a != c);
-  CHECK(countObjects() == 2);  // the second "lox" allocated nothing
+  CHECK(countObjects() == before + 2);  // the second "lox" allocated nothing
   CHECK(valuesEqual(OBJ_VAL(a), OBJ_VAL(b)));
   CHECK(!valuesEqual(OBJ_VAL(a), OBJ_VAL(c)));
   CHECK(!valuesEqual(OBJ_VAL(a), NIL_VAL));
@@ -127,12 +142,12 @@ static void testCopyStringInterns(void) {
   const char buffer[] = "xxloxxx";
   CHECK(copyString(&buffer[2], 3) == a);  // the 3 chars starting at index 2
 
-  freeVM();
-  initVM();
+  endTest();
 }
 
 static void testTakeStringFreesDuplicate(void) {
   initVM();
+  int before = countObjects();
 
   ObjString* original = copyString("abc", 3);
 
@@ -144,10 +159,9 @@ static void testTakeStringFreesDuplicate(void) {
   memcpy(chars, "abc", 4);
   ObjString* taken = takeString(chars, 3);
   CHECK(taken == original);
-  CHECK(countObjects() == 1);
+  CHECK(countObjects() == before + 1);
 
-  freeVM();
-  initVM();
+  endTest();
 }
 
 static void testHashIsFnv1a(void) {
@@ -156,13 +170,13 @@ static void testHashIsFnv1a(void) {
   CHECK(copyString("", 0)->hash == 2166136261u);
   CHECK(copyString("a", 1)->hash == 0xe40c292cu);
   CHECK(copyString("foobar", 6)->hash == 0xbf9cf968u);
-  freeVM();
-  initVM();
+  endTest();
 }
 
 static void testEveryObjectIsInTheList(void) {
   initVM();
-  CHECK(vm.objects == NULL);
+  Obj* oldHead = vm.objects;   // the objects initVM() created
+  int before = countObjects();
 
   ObjString* first = copyString("one", 3);
   ObjString* second = copyString("two", 3);
@@ -170,43 +184,92 @@ static void testEveryObjectIsInTheList(void) {
   memcpy(chars, "three", 6);
   ObjString* third = takeString(chars, 5);  // takes ownership of `chars`
 
-  CHECK(countObjects() == 3);
+  CHECK(countObjects() == before + 3);
   // New objects are pushed on the front, so the list is newest first.
   CHECK(vm.objects == (Obj*)third);
   CHECK(vm.objects->next == (Obj*)second);
   CHECK(vm.objects->next->next == (Obj*)first);
-  CHECK(vm.objects->next->next->next == NULL);
+  CHECK(vm.objects->next->next->next == oldHead);
 
-  freeVM();
-  initVM();
+  endTest();
 }
 
 static void testInterpretTracksRuntimeStrings(void) {
   initVM();
+  int before = countObjects();
 
-  // Compiling creates 3 constant strings; running creates 2 more, one per +.
-  // All 5 must be in the list so freeVM() can free them.
+  // Compiling creates the script's ObjFunction and 3 constant strings.
+  // Running creates the script's ObjClosure, and 2 strings, one per +.
+  // All 7 must be in the list so freeVM() can free them.
   silence();
   InterpretResult ok = interpret("print \"a\" + \"b\" + \"c\";");
   unsilence();
   CHECK(ok == INTERPRET_OK);
-  CHECK(countObjects() == 5);
+  CHECK(countObjects() == before + 7);
 
   // Objects survive a runtime error too, and are still freed by freeVM().
+  // New: a function, the string "x" and a closure.
   silence();
   InterpretResult error = interpret("print \"x\" + 1;");
   unsilence();
   CHECK(error == INTERPRET_RUNTIME_ERROR);
-  CHECK(countObjects() == 6);
+  CHECK(countObjects() == before + 10);
 
-  // Interning: running the first program again reuses all 5 strings.
+  // Interning: running the first program again reuses all 5 strings, so
+  // only a new function and closure are created.
   silence();
   interpret("print \"a\" + \"b\" + \"c\";");
   unsilence();
-  CHECK(countObjects() == 6);
+  CHECK(countObjects() == before + 12);
 
-  freeVM();
+  endTest();
+}
+
+static int countType(ObjType type) {
+  int count = 0;
+  for (Obj* object = vm.objects; object != NULL; object = object->next) {
+    if (object->type == type) count++;
+  }
+  return count;
+}
+
+static void testClosuresAndUpvalues(void) {
   initVM();
+
+  // Two closures capture one variable: they must share ONE ObjUpvalue.
+  // After make() returns, nothing is left open (the upvalue was closed).
+  silence();
+  InterpretResult result = interpret(
+      "var get; var set;\n"
+      "fun make() {\n"
+      "  var shared = 1;\n"
+      "  fun g() { return shared; }\n"
+      "  fun s(v) { shared = v; }\n"
+      "  get = g; set = s;\n"
+      "}\n"
+      "make();\n"
+      "set(42);\n"
+      "print get();\n");
+  unsilence();
+  CHECK(result == INTERPRET_OK);
+  CHECK(countType(OBJ_UPVALUE) == 1);
+  CHECK(vm.openUpvalues == NULL);
+
+  // Find that upvalue: closed means `location` points at its own `closed`
+  // field, which now holds the variable's last value.
+  ObjUpvalue* upvalue = NULL;
+  for (Obj* object = vm.objects; object != NULL; object = object->next) {
+    if (object->type == OBJ_UPVALUE) upvalue = (ObjUpvalue*)object;
+  }
+  CHECK(upvalue != NULL);
+  CHECK(upvalue->location == &upvalue->closed);
+  CHECK(IS_NUMBER(upvalue->closed) && AS_NUMBER(upvalue->closed) == 42);
+
+  // Four closures (script, make, g, s) and their 4 functions exist.
+  CHECK(countType(OBJ_CLOSURE) == 4);
+  CHECK(countType(OBJ_FUNCTION) == 4);
+
+  endTest();
 }
 
 int main(void) {
@@ -219,6 +282,7 @@ int main(void) {
   testHashIsFnv1a();
   testEveryObjectIsInTheList();
   testInterpretTracksRuntimeStrings();
+  testClosuresAndUpvalues();
 
   if (failures > 0) {
     printf("%d of %d checks failed\n", failures, checks);

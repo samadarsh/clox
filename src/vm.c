@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -13,11 +14,23 @@
 // embeddable VM would pass a VM* around instead.
 VM vm;
 
-static void resetStack(void) {
-  vm.stackTop = vm.stack;
+// clock(): seconds of CPU time used since the program started.
+static Value clockNative(int argCount, Value* args) {
+  // Natives receive their arguments but clock takes none. (Like the book,
+  // clox doesn't check a native's argument count.)
+  (void)argCount;
+  (void)args;
+  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-// Prints a runtime error, then which line it happened on, then clears the stack.
+static void resetStack(void) {
+  vm.stackTop = vm.stack;
+  vm.frameCount = 0;
+  vm.openUpvalues = NULL;
+}
+
+// Prints a runtime error, then a stack trace: one line per active call,
+// innermost first, each with the line it was executing.
 static void runtimeError(const char* format, ...) {
   va_list args;
   va_start(args, format);
@@ -25,11 +38,33 @@ static void runtimeError(const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  // ip already points past the failing instruction, hence the - 1.
-  size_t instruction = vm.ip - vm.chunk->code - 1;
-  int line = vm.chunk->lines[instruction];
-  fprintf(stderr, "[line %d] in script\n", line);
+  for (int i = vm.frameCount - 1; i >= 0; i--) {
+    CallFrame* frame = &vm.frames[i];
+    ObjFunction* function = frame->closure->function;
+    // ip already points past the instruction that was running, hence - 1.
+    // For outer frames that instruction is the OP_CALL still in progress.
+    size_t instruction = frame->ip - function->chunk.code - 1;
+    fprintf(stderr, "[line %d] in ",
+            function->chunk.lines[instruction]);
+    if (function->name == NULL) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()\n", function->name->chars);
+    }
+  }
+
   resetStack();
+}
+
+static void defineNative(const char* name, NativeFn function) {
+  // Both objects are pushed first so they are on the stack, and so reachable,
+  // while tableSet might allocate. That only matters once the garbage
+  // collector exists (chapter 26), but the book sets it up now.
+  push(OBJ_VAL(copyString(name, (int)strlen(name))));
+  push(OBJ_VAL(newNative(function)));
+  tableSet(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
+  pop();
+  pop();
 }
 
 void initVM(void) {
@@ -37,6 +72,8 @@ void initVM(void) {
   vm.objects = NULL;
   initTable(&vm.globals);
   initTable(&vm.strings);
+
+  defineNative("clock", clockNative);
 }
 
 void freeVM(void) {
@@ -62,6 +99,93 @@ static Value peek(int distance) {
   return vm.stackTop[-1 - distance];
 }
 
+// Starts running `closure`: pushes a new CallFrame. The callee and its
+// arguments are already on the stack; the frame's window simply starts there,
+// so the arguments become the function's first locals without being copied.
+static bool call(ObjClosure* closure, int argCount) {
+  if (argCount != closure->function->arity) {
+    runtimeError("Expected %d arguments but got %d.",
+        closure->function->arity, argCount);
+    return false;
+  }
+
+  if (vm.frameCount == FRAMES_MAX) {
+    runtimeError("Stack overflow.");
+    return false;
+  }
+
+  CallFrame* frame = &vm.frames[vm.frameCount++];
+  frame->closure = closure;
+  frame->ip = closure->function->chunk.code;
+  // -1 to include slot 0, which holds the callee itself.
+  frame->slots = vm.stackTop - argCount - 1;
+  return true;
+}
+
+static bool callValue(Value callee, int argCount) {
+  if (IS_OBJ(callee)) {
+    switch (OBJ_TYPE(callee)) {
+      case OBJ_CLOSURE:
+        return call(AS_CLOSURE(callee), argCount);
+      case OBJ_NATIVE: {
+        // A native runs immediately in C: no CallFrame. Replace the callee
+        // and its arguments on the stack with the result.
+        NativeFn native = AS_NATIVE(callee);
+        Value result = native(argCount, vm.stackTop - argCount);
+        vm.stackTop -= argCount + 1;
+        push(result);
+        return true;
+      }
+      default:
+        break; // Non-callable object type.
+    }
+  }
+  runtimeError("Can only call functions and classes.");
+  return false;
+}
+
+// Returns the upvalue for the stack slot `local`, creating it if needed. If
+// two closures capture the same variable they must get the same ObjUpvalue,
+// otherwise a change made through one wouldn't be seen through the other.
+static ObjUpvalue* captureUpvalue(Value* local) {
+  // The open list is sorted by slot address, highest first, so stop as soon
+  // as we pass the slot we're looking for.
+  ObjUpvalue* prevUpvalue = NULL;
+  ObjUpvalue* upvalue = vm.openUpvalues;
+  while (upvalue != NULL && upvalue->location > local) {
+    prevUpvalue = upvalue;
+    upvalue = upvalue->next;
+  }
+
+  if (upvalue != NULL && upvalue->location == local) {
+    return upvalue;
+  }
+
+  ObjUpvalue* createdUpvalue = newUpvalue(local);
+  createdUpvalue->next = upvalue;
+
+  if (prevUpvalue == NULL) {
+    vm.openUpvalues = createdUpvalue;
+  } else {
+    prevUpvalue->next = createdUpvalue;
+  }
+
+  return createdUpvalue;
+}
+
+// Closes every open upvalue that points at slot `last` or above, because
+// those slots are about to be discarded. "Closing" moves the variable off the
+// stack and into the upvalue object itself.
+static void closeUpvalues(Value* last) {
+  while (vm.openUpvalues != NULL &&
+         vm.openUpvalues->location >= last) {
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    upvalue->closed = *upvalue->location;   // copy the value in...
+    upvalue->location = &upvalue->closed;   // ...and point at the copy
+    vm.openUpvalues = upvalue->next;
+  }
+}
+
 // Lox's rule: nil and false are falsey; every other value is truthy,
 // including 0 and "".
 static bool isFalsey(Value value) {
@@ -85,12 +209,18 @@ static void concatenate(void) {
 }
 
 static InterpretResult run(void) {
-#define READ_BYTE() (*vm.ip++)
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+  // The frame of the function currently running. It changes on every call
+  // and return, so those instructions reload it.
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
+#define READ_BYTE() (*frame->ip++)
+#define READ_CONSTANT() \
+    (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 // Read a 16-bit operand: two bytes, high byte first. ip moves past both.
 #define READ_SHORT() \
-    (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+    (frame->ip += 2, \
+    (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 // Check both operands are numbers, then pop b first: the right operand was
 // pushed last, so it is on top. valueType wraps the result (NUMBER_VAL for
 // arithmetic, BOOL_VAL for comparisons).
@@ -114,7 +244,8 @@ static InterpretResult run(void) {
       printf(" ]");
     }
     printf("\n");
-    disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
+    disassembleInstruction(&frame->closure->function->chunk,
+        (int)(frame->ip - frame->closure->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -129,16 +260,16 @@ static InterpretResult run(void) {
       case OP_FALSE:    push(BOOL_VAL(false)); break;
       case OP_POP:      pop(); break;
       case OP_GET_LOCAL: {
-        // A local lives in a stack slot. The compiler worked out which one,
-        // so reading it is a single array index: no name, no lookup.
+        // Slots are relative to the current frame's window, so the same
+        // bytecode works however deep the call stack is.
         uint8_t slot = READ_BYTE();
-        push(vm.stack[slot]);
+        push(frame->slots[slot]);
         break;
       }
       case OP_SET_LOCAL: {
         uint8_t slot = READ_BYTE();
         // Assignment is an expression, so its value stays on the stack.
-        vm.stack[slot] = peek(0);
+        frame->slots[slot] = peek(0);
         break;
       }
       case OP_GET_GLOBAL: {
@@ -169,6 +300,18 @@ static InterpretResult run(void) {
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
+        break;
+      }
+      case OP_GET_UPVALUE: {
+        // One extra pointer hop compared to a local: through the upvalue to
+        // wherever the variable lives now (stack slot, or closed-over copy).
+        uint8_t slot = READ_BYTE();
+        push(*frame->closure->upvalues[slot]->location);
+        break;
+      }
+      case OP_SET_UPVALUE: {
+        uint8_t slot = READ_BYTE();
+        *frame->closure->upvalues[slot]->location = peek(0);
         break;
       }
       case OP_EQUAL: {
@@ -215,52 +358,95 @@ static InterpretResult run(void) {
         // A jump just moves the instruction pointer. The offset counts from
         // the byte after the operand, because READ_SHORT already moved past it.
         uint16_t offset = READ_SHORT();
-        vm.ip += offset;
+        frame->ip += offset;
         break;
       }
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
         // Peek, don't pop: the condition stays on the stack. `and`/`or` need
         // it as their result; statements emit their own OP_POP.
-        if (isFalsey(peek(0))) vm.ip += offset;
+        if (isFalsey(peek(0))) frame->ip += offset;
         break;
       }
       case OP_LOOP: {
         uint16_t offset = READ_SHORT();
-        vm.ip -= offset;
+        frame->ip -= offset;
         break;
       }
+      case OP_CALL: {
+        int argCount = READ_BYTE();
+        // The callee sits just below its arguments.
+        if (!callValue(peek(argCount), argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        // On success there's a new frame on top (for a closure), so switch
+        // to it. The caller's frame keeps its ip, pointing just after this
+        // OP_CALL: that's where execution resumes on return.
+        frame = &vm.frames[vm.frameCount - 1];
+        break;
+      }
+      case OP_CLOSURE: {
+        ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
+        ObjClosure* closure = newClosure(function);
+        push(OBJ_VAL(closure));
+        for (int i = 0; i < closure->upvalueCount; i++) {
+          uint8_t isLocal = READ_BYTE();
+          uint8_t index = READ_BYTE();
+          if (isLocal) {
+            // A local of the function running now (the enclosing one).
+            closure->upvalues[i] = captureUpvalue(frame->slots + index);
+          } else {
+            // Something the enclosing function itself captured.
+            closure->upvalues[i] = frame->closure->upvalues[index];
+          }
+        }
+        break;
+      }
+      case OP_CLOSE_UPVALUE:
+        // A captured local is going out of scope at the end of a block:
+        // move it into its upvalue before its stack slot disappears.
+        closeUpvalues(vm.stackTop - 1);
+        pop();
+        break;
       case OP_RETURN: {
-        // Exit interpreter.
-        return INTERPRET_OK;
+        Value result = pop();
+        // The returning function's slots are about to be discarded. Any of
+        // its variables that closures captured must be moved off the stack.
+        closeUpvalues(frame->slots);
+        vm.frameCount--;
+        if (vm.frameCount == 0) {
+          // Returning from the top-level script: we're done.
+          pop();
+          return INTERPRET_OK;
+        }
+
+        // Discard the callee, its arguments and its locals in one step, then
+        // leave the result where the callee was.
+        vm.stackTop = frame->slots;
+        push(result);
+        frame = &vm.frames[vm.frameCount - 1];
+        break;
       }
     }
   }
 
 #undef READ_BYTE
-#undef READ_CONSTANT
 #undef READ_SHORT
+#undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP
 }
 
 InterpretResult interpret(const char* source) {
-  // The chunk lives on this function's stack frame, but its arrays are on the
-  // heap, so it must be freed on every path out of here. (Strings it created
-  // are owned by vm.objects and freed in freeVM, not here.)
-  Chunk chunk;
-  initChunk(&chunk);
+  ObjFunction* function = compile(source);
+  if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
-  if (!compile(source, &chunk)) {
-    freeChunk(&chunk);
-    return INTERPRET_COMPILE_ERROR;
-  }
+  // The top-level script is run like a function call with no arguments.
+  push(OBJ_VAL(function));
+  ObjClosure* closure = newClosure(function);
+  pop();
+  push(OBJ_VAL(closure));
+  call(closure, 0);
 
-  vm.chunk = &chunk;
-  vm.ip = vm.chunk->code;
-
-  InterpretResult result = run();
-
-  freeChunk(&chunk);
-  return result;
+  return run();
 }

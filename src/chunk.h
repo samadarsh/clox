@@ -16,6 +16,8 @@ typedef enum {
   OP_GET_GLOBAL,    // operand: constant index of the variable's name
   OP_DEFINE_GLOBAL, // operand: constant index of the variable's name
   OP_SET_GLOBAL,    // operand: constant index of the variable's name
+  OP_GET_UPVALUE,   // operand: index into the closure's upvalue array
+  OP_SET_UPVALUE,   // operand: index into the closure's upvalue array
   OP_EQUAL,
   OP_GREATER,
   OP_LESS,
@@ -29,6 +31,9 @@ typedef enum {
   OP_JUMP,          // operand: 16-bit forward offset
   OP_JUMP_IF_FALSE, // operand: 16-bit forward offset; leaves the condition on the stack
   OP_LOOP,          // operand: 16-bit backward offset
+  OP_CALL,          // operand: argument count
+  OP_CLOSURE,       // operands: function constant, then (isLocal, index) per upvalue
+  OP_CLOSE_UPVALUE,
   OP_RETURN,
 } OpCode;
 

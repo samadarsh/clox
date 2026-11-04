@@ -1,0 +1,8 @@
+// While the variable is still on the stack, the closure reads it there, so
+// it sees assignments made after the closure was created.
+{
+  var a = "before";
+  fun show() { print a; }
+  a = "after";
+  show(); // expect: after
+}
