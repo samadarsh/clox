@@ -1,0 +1,37 @@
+fun makeCounter() {
+  var count = 0;
+  fun inc() {
+    count = count + 1;
+    return count;
+  }
+  return inc;
+}
+
+// Creates about 1 MB of garbage strings, forcing collections.
+fun churn() {
+  var s = "";
+  for (var i = 0; i < 400; i = i + 1) s = s + "garbage!";
+  return s;
+}
+
+// Closed upvalue: `count` lives only inside the upvalue, reachable through
+// the global closure `c`.
+var c = makeCounter();
+c();
+churn();
+c();
+churn();
+print c(); // expect: 3
+
+// Open upvalue: `local` is still on the stack while collections run.
+fun outer() {
+  var local = "captured " + "value";
+  fun get() { return local; }
+  churn();
+  local = local + "!";
+  churn();
+  return get;
+}
+var g = outer();
+churn();
+print g(); // expect: captured value!

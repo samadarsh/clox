@@ -16,9 +16,15 @@
 static Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
+  object->isMarked = false;
 
   object->next = vm.objects;
   vm.objects = object;
+
+#ifdef DEBUG_LOG_GC
+  printf("%p allocate %zu for %d\n", (void*)object, size, type);
+#endif
+
   return object;
 }
 
@@ -59,9 +65,15 @@ static ObjString* allocateString(char* chars, int length,
   string->length = length;
   string->chars = chars;
   string->hash = hash;
+
   // Record the new string in the intern table. vm.strings is used as a set:
-  // only the keys matter, so the value is just nil.
+  // only the keys matter, so the value is just nil. tableSet may grow the
+  // table, and that allocation may run the GC. Nothing references the new
+  // string yet, so push it on the stack (a root) to keep it alive meanwhile.
+  push(OBJ_VAL(string));
   tableSet(&vm.strings, string, NIL_VAL);
+  pop();
+
   return string;
 }
 

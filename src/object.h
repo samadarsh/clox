@@ -30,6 +30,7 @@ typedef enum {
 // The header shared by every heap object.
 struct Obj {
   ObjType type;
+  bool isMarked;      // reached during the current garbage collection?
   struct Obj* next;   // the next object in vm.objects, the list of all objects
 };
 

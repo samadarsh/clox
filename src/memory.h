@@ -24,10 +24,14 @@
 #define FREE_ARRAY(type, pointer, oldCount) \
     reallocate(pointer, sizeof(type) * (oldCount), 0)
 
-// The single function all of clox's dynamic memory goes through.
-// Funnelling every allocation through one place is what will later let the
-// garbage collector (chapter 26) track how much memory is in use.
+// The single function all of clox's dynamic memory goes through. It keeps
+// count of the bytes in use (vm.bytesAllocated), and may run the garbage
+// collector before allocating. So: ANY call that allocates can free every
+// object that isn't reachable from a root at that moment.
 void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+void markObject(Obj* object);
+void markValue(Value value);
+void collectGarbage(void);
 void freeObjects(void);
 
 #endif

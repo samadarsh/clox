@@ -22,7 +22,9 @@ The current set is every upstream test that passes: the 153 that
 classes exist), but it only uses a function (`fun foo() {}`), so it passes
 from chapter 24. Running the whole upstream suite gives exactly these 154.
 
-Still to come: the garbage collector in milestone 7 (no new tests), classes in 8.
+| 7 | none: upstream's `chap26_garbage` set equals chapter 25's. A correct GC is invisible to programs, so its tests are ours: `tests/unit/test_gc.c`, `tests/custom/gc/`, and the whole suite under `make test-stress` |
+
+Still to come: classes in milestone 8.
 
 Run one file or folder with:
 

@@ -1,5 +1,11 @@
 // Unit tests for values and heap objects.
 //
+// GC note: since chapter 26 any allocation can run the garbage collector,
+// which frees every object it can't reach from a root. A C variable is not a
+// root, so tests push the objects they keep using onto the VM stack. In the
+// stress build (GC on every allocation) a missing push here would show up as
+// a use-after-free.
+//
 // Memory note: these tests rely on `make test-asan`. On Linux, AddressSanitizer
 // also runs LeakSanitizer when the program exits. LeakSanitizer reports memory
 // that is still allocated but no longer reachable from any pointer. Each test
@@ -21,8 +27,6 @@
 #include "value.h"
 #include "vm.h"
 
-static int failures = 0;
-static int checks = 0;
 
 #define CHECK(cond) \
     do { \
@@ -62,8 +66,20 @@ static void unsilence(void) {
 // unreachable. (Calling initVM() here, as this file did before chapter 24,
 // now allocates the `clock` native, and the next test's initVM() would
 // overwrite and leak it.)
+static int failures;
+static int checks;
+
 static void endTest(void) {
   freeVM();
+  // Every byte allocated through reallocate() must have been given back.
+  // This also proves each caller passed the right old size: the GC's byte
+  // count (vm.bytesAllocated) depends on it.
+  checks++;
+  if (vm.bytesAllocated != 0) {
+    failures++;
+    fprintf(stderr, "endTest: %zu bytes still counted as allocated\n",
+            vm.bytesAllocated);
+  }
   vm.objects = NULL;
   initTable(&vm.globals);
   initTable(&vm.strings);
@@ -129,6 +145,7 @@ static void testCopyStringInterns(void) {
   int before = countObjects();
 
   ObjString* a = copyString("lox", 3);
+  push(OBJ_VAL(a));  // keep it alive across the allocations below
   ObjString* b = copyString("lox", 3);
   ObjString* c = copyString("lo", 2);
   CHECK(a == b);               // same characters -> the very same object
@@ -150,6 +167,7 @@ static void testTakeStringFreesDuplicate(void) {
   int before = countObjects();
 
   ObjString* original = copyString("abc", 3);
+  push(OBJ_VAL(original));
 
   // takeString owns `chars`. When the string already exists, it must free
   // `chars` and return the existing object. If it didn't free it, ASan's leak
@@ -179,7 +197,9 @@ static void testEveryObjectIsInTheList(void) {
   int before = countObjects();
 
   ObjString* first = copyString("one", 3);
+  push(OBJ_VAL(first));
   ObjString* second = copyString("two", 3);
+  push(OBJ_VAL(second));
   char* chars = ALLOCATE(char, 6);
   memcpy(chars, "three", 6);
   ObjString* third = takeString(chars, 5);  // takes ownership of `chars`
@@ -194,7 +214,13 @@ static void testEveryObjectIsInTheList(void) {
   endTest();
 }
 
+// Exact object counts only hold when no collection runs in between, so this
+// test is skipped in the stress build (GC on every allocation). The custom
+// .lox GC tests and test_gc.c cover what happens when collections do run.
 static void testInterpretTracksRuntimeStrings(void) {
+#ifdef DEBUG_STRESS_GC
+  return;
+#endif
   initVM();
   int before = countObjects();
 

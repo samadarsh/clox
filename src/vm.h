@@ -30,7 +30,13 @@ typedef struct {
   Table strings;          // every string, for interning (used as a set)
   ObjUpvalue* openUpvalues; // upvalues still pointing into the stack, sorted
                             // by stack slot, highest slot first
+
+  size_t bytesAllocated;  // heap bytes in use, through reallocate()
+  size_t nextGC;          // collect when bytesAllocated goes above this
   Obj* objects;           // head of the linked list of every heap object
+  int grayCount;          // the gray stack: objects marked but not yet
+  int grayCapacity;       //   scanned for references to other objects
+  Obj** grayStack;
 } VM;
 
 typedef enum {

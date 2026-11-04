@@ -1,0 +1,13 @@
+// Builds the same 3000-character string twice, in two different ways. Every
+// concatenation creates a new string and makes the previous one garbage:
+// over 3 MB in total, so collections happen even in normal builds.
+var s = "";
+for (var i = 0; i < 1000; i = i + 1) s = s + "abc";
+
+var t = "";
+for (var j = 0; j < 1000; j = j + 1) t = t + "a" + "bc";
+
+// Equal content means the same interned object, even though each string was
+// built separately and lots of collections ran in between.
+print s == t; // expect: true
+print s == t + "x"; // expect: false

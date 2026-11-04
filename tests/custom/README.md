@@ -15,7 +15,13 @@ explanation.
 | `control_flow/` | nested `if`/`else`, short-circuit `and`/`or` (the right side must not run), every `for` clause missing, zero-iteration loops, stack balance over 1000 iterations, jumps over more than 255 bytes |
 | `functions/` | recursion, mutual recursion, the exact call-depth limit (63 calls OK, 64 is "Stack overflow."), wrong argument counts, calling non-functions, errors in nested calls, functions as values, `clock()` |
 | `closures/` | the counter walkthrough, two closures sharing one variable, loop variable capture, closing at block end and at return, three-level capture |
+| `gc/` | lots of garbage (string building in loops), closures and open/closed upvalues surviving collections, interned strings freed and recreated, GC during deep calls and during compiling |
 | `programs/` | longer programs using many features together |
+
+The GC tests do their real work under `make test-stress`, which collects before
+every allocation. `tests/unit/test_gc.c` checks the collector directly: what
+gets freed, the weak string table, the threshold, and memory staying bounded
+while a program creates about 5 MB of garbage.
 
 The full multi-frame stack trace (every frame and its line, not just the first)
 is checked in `tests/cli_test.sh`, since the `.lox` runner, like upstream's,

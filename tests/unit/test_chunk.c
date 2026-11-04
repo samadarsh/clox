@@ -79,7 +79,6 @@ static void testAddConstantReturnsIndex(void) {
 }
 
 static void testStackIsLastInFirstOut(void) {
-  initVM();
   push(NUMBER_VAL(1.0));
   push(NUMBER_VAL(2.0));
   push(NUMBER_VAL(3.0));
@@ -88,14 +87,18 @@ static void testStackIsLastInFirstOut(void) {
   push(NUMBER_VAL(4.0));
   CHECK(AS_NUMBER(pop()) == 4.0);
   CHECK(AS_NUMBER(pop()) == 1.0);
-  freeVM();
 }
 
 int main(void) {
+  // Since chapter 26, chunks allocate through the VM (which may collect
+  // garbage), and addConstant uses the VM stack, so the VM must exist first.
+  initVM();
   testNewChunkIsEmpty();
   testWriteChunkGrowsAndKeepsBytes();
   testAddConstantReturnsIndex();
   testStackIsLastInFirstOut();
+
+  freeVM();
 
   if (failures > 0) {
     printf("%d of %d checks failed\n", failures, checks);

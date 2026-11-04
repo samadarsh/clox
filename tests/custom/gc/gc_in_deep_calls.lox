@@ -1,0 +1,13 @@
+// Collections run while many frames are active. Each frame holds a string
+// in a local; all of them are roots through the stack.
+fun build(n) {
+  if (n == 0) return "";
+  var mine = "<" + "a" + ">";
+  var rest = build(n - 1);
+  return mine + rest;
+}
+
+var deep = build(50);
+var expected = "";
+for (var i = 0; i < 50; i = i + 1) expected = expected + "<a>";
+print deep == expected; // expect: true

@@ -1,0 +1,13 @@
+// The compiler allocates (names, constants, nested functions) while it
+// works. Under test-stress every one of those allocations runs the GC, which
+// must find the half-built functions through the compiler roots.
+fun a() {
+  fun b() {
+    fun c() {
+      return "c" + "-" + "level";
+    }
+    return c;
+  }
+  return b;
+}
+print a()()(); // expect: c-level

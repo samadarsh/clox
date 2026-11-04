@@ -1,0 +1,15 @@
+// "x", "xx", ... "xxxxxxxxxx" are made over and over. Each time `word` is
+// reset they become garbage, so a collection frees them and removes them from
+// the intern table (tableRemoveWhite). The next round creates them again.
+// If the intern table kept pointers to freed strings, comparing with the
+// literal below would read freed memory.
+var word = "";
+var rounds = 0;
+for (var i = 0; i < 3000; i = i + 1) {
+  word = word + "x";
+  if (word == "xxxxxxxxxx") {
+    rounds = rounds + 1;
+    word = "";
+  }
+}
+print rounds; // expect: 300

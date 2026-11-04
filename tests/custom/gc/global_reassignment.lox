@@ -1,0 +1,7 @@
+// Reassigning a global makes the old value garbage; the new one must survive.
+var g = "first" + " value";
+for (var i = 0; i < 200; i = i + 1) {
+  g = "value " + "number " + "next";
+  var junk = g + g + g + g;
+}
+print g; // expect: value number next

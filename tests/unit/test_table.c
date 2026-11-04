@@ -15,6 +15,7 @@
 #include "object.h"
 #include "table.h"
 #include "value.h"
+#include "vm.h"
 
 static int failures = 0;
 static int checks = 0;
@@ -338,6 +339,11 @@ static void testFindStringComparesContent(void) {
 }
 
 int main(void) {
+  // Table arrays are allocated through reallocate(), which may run the GC
+  // (on every allocation in the stress build), so the VM must be set up.
+  // The GC never touches these test tables: they aren't roots, and their
+  // static keys aren't heap objects.
+  initVM();
   testEmptyTable();
   testInsertFindOverwrite();
   testSameHashDifferentKey();
@@ -350,6 +356,8 @@ int main(void) {
   testManyKeysInOneBucket();
   testAddAllCopiesLiveEntries();
   testFindStringComparesContent();
+
+  freeVM();
 
   if (failures > 0) {
     printf("%d of %d checks failed\n", failures, checks);

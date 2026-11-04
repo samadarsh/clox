@@ -131,6 +131,28 @@ void tableAddAll(Table* from, Table* to) {
   }
 }
 
+// For the intern table, which holds its strings weakly: delete every entry
+// whose key wasn't marked, because the sweep is about to free that string.
+// Otherwise the table would keep a dangling pointer to freed memory.
+void tableRemoveWhite(Table* table) {
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    if (entry->key != NULL && !entry->key->obj.isMarked) {
+      tableDelete(table, entry->key);
+    }
+  }
+}
+
+// For tables that hold their contents strongly (the globals): mark every key
+// and value as reachable.
+void markTable(Table* table) {
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    markObject((Obj*)entry->key);
+    markValue(entry->value);
+  }
+}
+
 // Like findEntry, but compares by content instead of by pointer. This is the
 // one place that does, and it's how interning finds an existing string.
 ObjString* tableFindString(Table* table, const char* chars,

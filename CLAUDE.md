@@ -65,7 +65,10 @@ make build       release build (-O2, -Werror)   -> build/release/clox
 make debug       ASan + UBSan build              -> build/debug/clox
 make trace       debug + DEBUG_TRACE_EXECUTION   -> build/trace/clox
 make test        all tests, release build
-make test-asan   all tests, sanitized build (what CI runs; use this before asking to commit)
+make test-asan   all tests, sanitized build
+make test-stress all tests, GC before every allocation, under ASan
+make gclog / make gclog-stress   builds that log GC activity
+                 (CI runs test, test-asan and test-stress; run all three before asking to commit)
 make clean
 python3 tests/run_tests.py build/debug/clox tests/lox/<dir>   # one suite
 ```
@@ -81,6 +84,12 @@ python3 tests/run_tests.py build/debug/clox tests/lox/<dir>   # one suite
   frees everything, then clears the VM's pointers *without allocating*, so any
   object freeVM missed is unreachable and LeakSanitizer reports it. Don't end
   a test with `initVM()`: since chapter 24 it allocates (the `clock` native).
+- Garbage collector rule: any call that allocates (copyString, newClosure,
+  tableSet, writeValueArray, ...) may run the GC, which frees every object not
+  reachable from a root. A pointer held only in a C local variable is NOT a
+  root. Push such objects on the VM stack (or otherwise make them reachable)
+  before the next allocation, as concatenate(), allocateString(),
+  addConstant() and defineNative() do. `make test-stress` catches violations.
 - LeakSanitizer doesn't run on macOS. Before asking to commit a milestone
   that touches memory, run `make test-asan` in a Linux container (Ubuntu with
   clang, make and python3), not only on the Mac.

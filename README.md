@@ -20,7 +20,7 @@ macOS.
 - [x] **4. Hash tables and variables**: global and local variables (ch. 20–22)
 - [x] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
 - [x] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
-- [ ] **7. Garbage collector**: mark-sweep with tri-color marking (ch. 26)
+- [x] **7. Garbage collector**: mark-sweep with tri-color marking (ch. 26)
 - [ ] **8. Classes and inheritance**: instances, methods, initializers and `super` (ch. 27–29)
 - [ ] **9. Speed and polish**: optimization, benchmarks vs Python, a demo and a WebAssembly playground (ch. 30)
 
@@ -32,6 +32,8 @@ You need clang, make and Python 3 (Python runs the tests).
 make build        # optimized build -> build/release/clox
 make debug        # with AddressSanitizer + UBSan -> build/debug/clox
 make trace        # debug build that prints every instruction as it runs
+make gclog        # debug build that logs every GC allocation, mark and free
+make gclog-stress # the same, collecting before every allocation
 ```
 
 ## Usage
@@ -106,6 +108,7 @@ $ ./build/trace/clox scope.lox    # { var a = 1; { var a = 2; print a; } print a
 ```sh
 make test         # unit tests + Lox test suite, release build
 make test-asan    # the same, under AddressSanitizer + UBSan
+make test-stress  # the same, with the GC running before EVERY allocation (+ ASan)
 ```
 
 Lox tests use the same inline annotations as the
@@ -117,13 +120,21 @@ print 1 + 2;      // expect: 3
 ```
 
 `tests/run_tests.py` runs each `.lox` file and checks stdout, stderr and the
-exit code against those comments. There are four kinds of tests:
+exit code against those comments.
+
+`make test-stress` matters most for the garbage collector. Collecting before
+every allocation frees any object the GC can't reach at the first chance, so
+a forgotten root turns into an immediate use-after-free that ASan reports.
+With normal GC timing, the same bug can stay silent. CI runs all three
+(`test`, `test-asan`, `test-stress`) on Linux and macOS.
+
+There are four kinds of tests:
 
 | Where | What |
 |---|---|
 | `tests/lox/` | official tests from the book's repo, added once clox passes them |
 | `tests/custom/` | our own `.lox` tests for what the official suite can't reach yet |
-| `tests/unit/` | C unit tests: chunk, VM stack, scanner, values and heap objects, hash table |
+| `tests/unit/` | C unit tests: chunk, VM stack, scanner, values and heap objects, hash table, garbage collector |
 | `tests/cli_test.sh` | the REPL and the exit codes |
 
 ## Project layout
@@ -138,7 +149,7 @@ src/
   object.c     heap objects: strings (interned), functions, closures, upvalues,
                natives, all linked into vm.objects
   table.c      hash table: global variables and the string intern set
-  memory.c     every allocation goes through reallocate()
+  memory.c     reallocate() and the mark-sweep garbage collector
   debug.c      the disassembler
   main.c       REPL and file runner
 tests/         see the table above
