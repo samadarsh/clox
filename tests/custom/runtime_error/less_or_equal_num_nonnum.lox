@@ -1,3 +1,0 @@
-// Ported from upstream test/operator/less_or_equal_num_nonnum.lox with the trailing ';' removed,
-// because statements arrive in chapter 21. Delete when the official file passes.
-1 <= "1" // expect runtime error: Operands must be numbers.

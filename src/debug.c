@@ -24,6 +24,15 @@ static int simpleInstruction(const char* name, int offset) {
   return offset + 1;
 }
 
+// An instruction whose operand is a stack slot number, not a constant. Local
+// variables have no names at runtime, so there is nothing else to print.
+static int byteInstruction(const char* name, Chunk* chunk,
+                           int offset) {
+  uint8_t slot = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, slot);
+  return offset + 2;
+}
+
 // Prints one instruction and returns the offset of the next one.
 // Instructions have different sizes, so the caller can't just add 1.
 int disassembleInstruction(Chunk* chunk, int offset) {
@@ -44,6 +53,18 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return simpleInstruction("OP_TRUE", offset);
     case OP_FALSE:
       return simpleInstruction("OP_FALSE", offset);
+    case OP_POP:
+      return simpleInstruction("OP_POP", offset);
+    case OP_GET_LOCAL:
+      return byteInstruction("OP_GET_LOCAL", chunk, offset);
+    case OP_SET_LOCAL:
+      return byteInstruction("OP_SET_LOCAL", chunk, offset);
+    case OP_GET_GLOBAL:
+      return constantInstruction("OP_GET_GLOBAL", chunk, offset);
+    case OP_DEFINE_GLOBAL:
+      return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+    case OP_SET_GLOBAL:
+      return constantInstruction("OP_SET_GLOBAL", chunk, offset);
     case OP_EQUAL:
       return simpleInstruction("OP_EQUAL", offset);
     case OP_GREATER:
@@ -62,6 +83,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return simpleInstruction("OP_NOT", offset);
     case OP_NEGATE:
       return simpleInstruction("OP_NEGATE", offset);
+    case OP_PRINT:
+      return simpleInstruction("OP_PRINT", offset);
     case OP_RETURN:
       return simpleInstruction("OP_RETURN", offset);
     default:

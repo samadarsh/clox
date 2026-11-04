@@ -1,6 +1,6 @@
 // Comments and line breaks may appear anywhere between tokens.
-1 + // one
+print 1 + // one
   2 *
   // still going
-  3
+  3;
 // expect: 7

@@ -1,0 +1,6 @@
+// Strings are equal when their characters are. Because of interning, the
+// VM checks that with a single pointer comparison.
+print "ab" == "a" + "b"; // expect: true
+print "ab" == "ba";      // expect: false
+print "ab" == "abc";     // expect: false
+print "" == "";          // expect: true

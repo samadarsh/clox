@@ -1,2 +1,2 @@
 // Lox does not order strings: < only works on numbers.
-"a" < "b" // expect runtime error: Operands must be numbers.
+print "a" < "b"; // expect runtime error: Operands must be numbers.

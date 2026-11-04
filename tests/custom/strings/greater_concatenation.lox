@@ -1,3 +1,0 @@
-// Many intermediate strings: each + makes a new heap object.
-"a" + "b" + "c" + "d" + "e" + "f" + "g" + "h"
-// expect: abcdefgh

@@ -1,2 +1,1 @@
-// [line 2] Error at end: Expect expression.
-1 +
+print 1 +; // Error at ';': Expect expression.

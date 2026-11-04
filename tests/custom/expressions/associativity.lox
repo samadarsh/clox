@@ -1,0 +1,4 @@
+// Operators of equal precedence group from the left.
+print 10 - 3 - 2; // expect: 5
+print 64 / 4 / 2; // expect: 8
+print 2 * 3 / 6;  // expect: 1

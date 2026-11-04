@@ -1,3 +1,0 @@
-// Values of different types are never equal, no conversion happens.
-1 == true
-// expect: false

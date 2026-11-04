@@ -110,17 +110,52 @@ static void testCopyStringOwnsItsCharacters(void) {
   initVM();  // drop the list head so anything left would show as a leak
 }
 
-static void testStringsCompareByContent(void) {
+static void testCopyStringInterns(void) {
   initVM();
 
   ObjString* a = copyString("lox", 3);
   ObjString* b = copyString("lox", 3);
   ObjString* c = copyString("lo", 2);
-  CHECK(a != b);  // two separate objects...
-  CHECK(valuesEqual(OBJ_VAL(a), OBJ_VAL(b)));  // ...but equal values
+  CHECK(a == b);               // same characters -> the very same object
+  CHECK(a != c);
+  CHECK(countObjects() == 2);  // the second "lox" allocated nothing
+  CHECK(valuesEqual(OBJ_VAL(a), OBJ_VAL(b)));
   CHECK(!valuesEqual(OBJ_VAL(a), OBJ_VAL(c)));
   CHECK(!valuesEqual(OBJ_VAL(a), NIL_VAL));
 
+  // A slice of a longer buffer interns to the same string too.
+  const char buffer[] = "xxloxxx";
+  CHECK(copyString(&buffer[2], 3) == a);  // the 3 chars starting at index 2
+
+  freeVM();
+  initVM();
+}
+
+static void testTakeStringFreesDuplicate(void) {
+  initVM();
+
+  ObjString* original = copyString("abc", 3);
+
+  // takeString owns `chars`. When the string already exists, it must free
+  // `chars` and return the existing object. If it didn't free it, ASan's leak
+  // check would report these 4 bytes; if it freed it twice, ASan would report
+  // a double free.
+  char* chars = ALLOCATE(char, 4);
+  memcpy(chars, "abc", 4);
+  ObjString* taken = takeString(chars, 3);
+  CHECK(taken == original);
+  CHECK(countObjects() == 1);
+
+  freeVM();
+  initVM();
+}
+
+static void testHashIsFnv1a(void) {
+  initVM();
+  // Published FNV-1a 32-bit test vectors.
+  CHECK(copyString("", 0)->hash == 2166136261u);
+  CHECK(copyString("a", 1)->hash == 0xe40c292cu);
+  CHECK(copyString("foobar", 6)->hash == 0xbf9cf968u);
   freeVM();
   initVM();
 }
@@ -152,16 +187,22 @@ static void testInterpretTracksRuntimeStrings(void) {
   // Compiling creates 3 constant strings; running creates 2 more, one per +.
   // All 5 must be in the list so freeVM() can free them.
   silence();
-  InterpretResult ok = interpret("\"a\" + \"b\" + \"c\"");
+  InterpretResult ok = interpret("print \"a\" + \"b\" + \"c\";");
   unsilence();
   CHECK(ok == INTERPRET_OK);
   CHECK(countObjects() == 5);
 
   // Objects survive a runtime error too, and are still freed by freeVM().
   silence();
-  InterpretResult error = interpret("\"x\" + 1");
+  InterpretResult error = interpret("print \"x\" + 1;");
   unsilence();
   CHECK(error == INTERPRET_RUNTIME_ERROR);
+  CHECK(countObjects() == 6);
+
+  // Interning: running the first program again reuses all 5 strings.
+  silence();
+  interpret("print \"a\" + \"b\" + \"c\";");
+  unsilence();
   CHECK(countObjects() == 6);
 
   freeVM();
@@ -173,7 +214,9 @@ int main(void) {
   testTagsAndPayloads();
   testValuesEqual();
   testCopyStringOwnsItsCharacters();
-  testStringsCompareByContent();
+  testCopyStringInterns();
+  testTakeStringFreesDuplicate();
+  testHashIsFnv1a();
   testEveryObjectIsInTheList();
   testInterpretTracksRuntimeStrings();
 

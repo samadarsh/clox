@@ -17,7 +17,7 @@ macOS.
 - [x] **1. Bytecode and VM**: chunks, a disassembler and a stack-based VM (ch. 14–15)
 - [x] **2. Scanner and compiler**: scan and compile expressions with a Pratt parser (ch. 16–17)
 - [x] **3. Types and strings**: booleans, nil and heap-allocated strings (ch. 18–19)
-- [ ] **4. Hash tables and variables**: global and local variables (ch. 20–22)
+- [x] **4. Hash tables and variables**: global and local variables (ch. 20–22)
 - [ ] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
 - [ ] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
 - [ ] **7. Garbage collector**: mark-sweep with tri-color marking (ch. 26)
@@ -41,19 +41,20 @@ make trace        # debug build that prints every instruction as it runs
 ./build/release/clox script.lox   # run a file
 ```
 
-So far (milestone 3), a program is a single expression, and clox prints its
-value. Values can be numbers, booleans, `nil` and strings. Statements and
-`print` arrive in milestone 4.
+So far (milestone 4), clox runs statements: `print`, expression statements,
+`var` declarations, assignment and `{ }` blocks with local variables. Values
+are numbers, booleans, `nil` and strings. Control flow arrives in milestone 5.
 
 ```
-> 1 + 2 * 3
-7
-> "con" + "cat"
-concat
-> !nil == (1 < 2)
-true
-> 1 + "a"
-Operands must be two numbers or two strings.
+> var greeting = "hello";
+> print greeting + " world";
+hello world
+> { var greeting = "shadowed"; print greeting; }
+shadowed
+> print greeting;
+hello
+> print undefinedThing;
+Undefined variable 'undefinedThing'.
 [line 1] in script
 ```
 
@@ -64,14 +65,17 @@ Exit codes follow the book: `65` compile error, `70` runtime error,
 every instruction and the stack as the VM runs it:
 
 ```
-$ ./build/trace/clox walk.lox          # 1 + 2 * 3
+$ ./build/trace/clox scope.lox    # { var a = 1; { var a = 2; print a; } print a; }
 == code ==
 0000    1 OP_CONSTANT         0 '1'
 0002    | OP_CONSTANT         1 '2'
-0004    | OP_CONSTANT         2 '3'
-0006    | OP_MULTIPLY
-0007    | OP_ADD
-0008    | OP_RETURN
+0004    | OP_GET_LOCAL        1
+0006    | OP_PRINT
+0007    | OP_POP
+0008    | OP_GET_LOCAL        0
+0010    | OP_PRINT
+0011    | OP_POP
+0012    | OP_RETURN
 ...
 ```
 
@@ -97,7 +101,7 @@ exit code against those comments. There are four kinds of tests:
 |---|---|
 | `tests/lox/` | official tests from the book's repo, added once clox passes them |
 | `tests/custom/` | our own `.lox` tests for what the official suite can't reach yet |
-| `tests/unit/` | C unit tests: chunk, VM stack, scanner, values and heap objects |
+| `tests/unit/` | C unit tests: chunk, VM stack, scanner, values and heap objects, hash table |
 | `tests/cli_test.sh` | the REPL and the exit codes |
 
 ## Project layout
@@ -109,11 +113,13 @@ src/
   vm.c         runs bytecode on a value stack
   chunk.c      a bytecode array + line numbers + constants
   value.c      Lox values: a tagged union of bool, nil, number, object
-  object.c     heap objects (strings), all linked into vm.objects
+  object.c     heap objects (strings, interned), all linked into vm.objects
+  table.c      hash table: global variables and the string intern set
   memory.c     every allocation goes through reallocate()
   debug.c      the disassembler
   main.c       REPL and file runner
 tests/         see the table above
+tools/         upstream_tests.py: which official tests a chapter should pass
 ```
 
 ## License

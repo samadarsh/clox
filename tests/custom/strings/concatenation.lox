@@ -1,0 +1,4 @@
+print "st" + "ri" + "ng";       // expect: string
+print "" + "a" + "";            // expect: a
+print "a" + ("b" + "c");        // expect: abc
+print "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h"; // expect: abcdefgh

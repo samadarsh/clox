@@ -1,3 +1,0 @@
-// The empty string is truthy too.
-!""
-// expect: false

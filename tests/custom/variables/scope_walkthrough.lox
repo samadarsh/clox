@@ -1,0 +1,9 @@
+// The example from the milestone 4 walkthrough.
+{
+  var a = 1;
+  {
+    var a = 2;
+    print a; // expect: 2
+  }
+  print a; // expect: 1
+}

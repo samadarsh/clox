@@ -1,5 +1,5 @@
 // The first + (line 3) is fine. The second fails, and its OP_ADD carries the
 // line of the token just before it was emitted: "a" on line 5.
-1 +
+print 1 +
 2 +
-"a" // expect runtime error: Operands must be two numbers or two strings.
+"a"; // expect runtime error: Operands must be two numbers or two strings.

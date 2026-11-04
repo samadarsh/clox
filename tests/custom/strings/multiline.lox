@@ -1,6 +1,0 @@
-"1
-2
-3"
-// expect: 1
-// expect: 2
-// expect: 3

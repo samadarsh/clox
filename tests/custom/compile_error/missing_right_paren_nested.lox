@@ -1,2 +1,1 @@
-// [line 2] Error at end: Expect ')' after expression.
-((1 + 2) * 3
+print ((1 + 2) * 3; // Error at ';': Expect ')' after expression.

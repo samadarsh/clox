@@ -1,5 +1,5 @@
 // The error is reported on the line of the offending token.
-1 +
+print 1 +
 2 *
-// [line 5] Error at ')': Expect expression.
-)
+// [line 5] Error at ';': Expect expression.
+;

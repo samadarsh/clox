@@ -76,7 +76,7 @@ test: test-unit test-cli test-lox
 test-asan:
 	@$(MAKE) --no-print-directory MODE=debug test
 
-# C unit tests: chunk, value array, VM stack, scanner, values and objects.
+# C unit tests: chunk, value array, VM stack, scanner, values and objects, table.
 test-unit: $(UNIT_BIN)
 	@for t in $(UNIT_BIN); do echo "--- $$t"; $$t || exit 1; done
 

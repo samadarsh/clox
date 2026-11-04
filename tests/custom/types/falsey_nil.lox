@@ -1,3 +1,0 @@
-// nil is falsey.
-!nil
-// expect: true

@@ -1,0 +1,2 @@
+// Within one statement, only the first error is reported.
+print ) ) ); // Error at ')': Expect expression.

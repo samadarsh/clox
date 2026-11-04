@@ -1,0 +1,7 @@
+// Cases beyond the official precedence.lox.
+print 1 + 2 * 3;          // expect: 7
+print 2 * 3 + 1;          // expect: 7
+print 2 + 3 * 4 - 10 / 5; // expect: 12
+print 1 + 2 < 4;          // expect: true
+print !true == false;     // expect: true
+print -2 * 3;             // expect: -6

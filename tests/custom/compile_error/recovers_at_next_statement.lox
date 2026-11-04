@@ -1,0 +1,6 @@
+// After an error the parser skips to the next statement (synchronize), so a
+// later, unrelated error is still reported.
+print ); // Error at ')': Expect expression.
+print 1;
+var = 2; // Error at '=': Expect variable name.
+print * 3; // Error at '*': Expect expression.

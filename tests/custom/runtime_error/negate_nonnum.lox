@@ -1,3 +1,0 @@
-// Ported from upstream test/operator/negate_nonnum.lox with the trailing ';' removed,
-// because statements arrive in chapter 21. Delete when the official file passes.
--"s" // expect runtime error: Operand must be a number.

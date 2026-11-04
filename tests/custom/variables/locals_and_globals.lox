@@ -1,0 +1,10 @@
+var a = "global a";
+var b = "global b";
+{
+  var a = "local a";
+  print a; // expect: local a
+  print b; // expect: global b
+  b = "changed by block";
+}
+print a; // expect: global a
+print b; // expect: changed by block

@@ -1,2 +1,1 @@
-// [line 2] Error: Unexpected character.
-1 + @
+print 1 + @; // Error: Unexpected character.

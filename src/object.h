@@ -27,6 +27,7 @@ struct ObjString {
   Obj obj;
   int length;    // number of characters, not counting the '\0'
   char* chars;   // heap array of length + 1 bytes, '\0'-terminated
+  uint32_t hash; // computed once at creation, used by hash tables
 };
 
 ObjString* takeString(char* chars, int length);

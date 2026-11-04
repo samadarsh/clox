@@ -1,0 +1,4 @@
+// A runtime error ends the program: later statements never run.
+print "before"; // expect: before
+-"a"; // expect runtime error: Operand must be a number.
+print "after";

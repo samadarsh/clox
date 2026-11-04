@@ -46,16 +46,9 @@ bool valuesEqual(Value a, Value b) {
     case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
     case VAL_NIL:    return true;
     case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
-    case VAL_OBJ: {
-      // Two separate string objects with the same characters are equal, so
-      // compare the characters, not the pointers. (Chapter 20 interns strings
-      // so a pointer comparison becomes enough.)
-      ObjString* aString = AS_STRING(a);
-      ObjString* bString = AS_STRING(b);
-      return aString->length == bString->length &&
-          memcmp(aString->chars, bString->chars,
-                 aString->length) == 0;
-    }
+    // Strings are interned (object.c), so two strings with the same
+    // characters are always the same object: comparing pointers is enough.
+    case VAL_OBJ:    return AS_OBJ(a) == AS_OBJ(b);
     default:         return false; // Unreachable.
   }
 }

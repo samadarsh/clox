@@ -1,0 +1,6 @@
+// Strings built at runtime, in different ways, are still the same object.
+var a = "he";
+var b = "llo";
+var c = "hel" + "lo";
+print a + b == c;       // expect: true
+print a + b == "hello"; // expect: true

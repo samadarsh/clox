@@ -2,6 +2,7 @@
 #define clox_vm_h
 
 #include "chunk.h"
+#include "table.h"
 #include "value.h"
 
 #define STACK_MAX 256
@@ -11,6 +12,8 @@ typedef struct {
   uint8_t* ip;            // "instruction pointer": the next byte to run
   Value stack[STACK_MAX]; // the value stack
   Value* stackTop;        // points one past the top item (the next free slot)
+  Table globals;          // global variables: name -> value
+  Table strings;          // every string, for interning (used as a set)
   Obj* objects;           // head of the linked list of every heap object
 } VM;
 

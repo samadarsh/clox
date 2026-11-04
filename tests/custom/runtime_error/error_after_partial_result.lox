@@ -1,2 +1,2 @@
 // The left side evaluates fine (to 3) before the type error.
-(1 + 2) * "x" // expect runtime error: Operands must be numbers.
+print (1 + 2) * "x"; // expect runtime error: Operands must be numbers.

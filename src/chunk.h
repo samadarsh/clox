@@ -10,6 +10,12 @@ typedef enum {
   OP_NIL,
   OP_TRUE,
   OP_FALSE,
+  OP_POP,
+  OP_GET_LOCAL,     // operand: stack slot
+  OP_SET_LOCAL,     // operand: stack slot
+  OP_GET_GLOBAL,    // operand: constant index of the variable's name
+  OP_DEFINE_GLOBAL, // operand: constant index of the variable's name
+  OP_SET_GLOBAL,    // operand: constant index of the variable's name
   OP_EQUAL,
   OP_GREATER,
   OP_LESS,
@@ -19,6 +25,7 @@ typedef enum {
   OP_DIVIDE,
   OP_NOT,
   OP_NEGATE,
+  OP_PRINT,
   OP_RETURN,
 } OpCode;
 

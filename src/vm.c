@@ -35,9 +35,13 @@ static void runtimeError(const char* format, ...) {
 void initVM(void) {
   resetStack();
   vm.objects = NULL;
+  initTable(&vm.globals);
+  initTable(&vm.strings);
 }
 
 void freeVM(void) {
+  freeTable(&vm.globals);
+  freeTable(&vm.strings);
   freeObjects();
 }
 
@@ -83,6 +87,7 @@ static void concatenate(void) {
 static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 // Check both operands are numbers, then pop b first: the right operand was
 // pushed last, so it is on top. valueType wraps the result (NUMBER_VAL for
 // arithmetic, BOOL_VAL for comparisons).
@@ -119,6 +124,50 @@ static InterpretResult run(void) {
       case OP_NIL:      push(NIL_VAL); break;
       case OP_TRUE:     push(BOOL_VAL(true)); break;
       case OP_FALSE:    push(BOOL_VAL(false)); break;
+      case OP_POP:      pop(); break;
+      case OP_GET_LOCAL: {
+        // A local lives in a stack slot. The compiler worked out which one,
+        // so reading it is a single array index: no name, no lookup.
+        uint8_t slot = READ_BYTE();
+        push(vm.stack[slot]);
+        break;
+      }
+      case OP_SET_LOCAL: {
+        uint8_t slot = READ_BYTE();
+        // Assignment is an expression, so its value stays on the stack.
+        vm.stack[slot] = peek(0);
+        break;
+      }
+      case OP_GET_GLOBAL: {
+        ObjString* name = READ_STRING();
+        Value value;
+        if (!tableGet(&vm.globals, name, &value)) {
+          runtimeError("Undefined variable '%s'.", name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(value);
+        break;
+      }
+      case OP_DEFINE_GLOBAL: {
+        ObjString* name = READ_STRING();
+        // Add to the table before popping, so the value is still on the
+        // stack (and so still reachable) while the table might reallocate.
+        // That matters once the garbage collector exists (chapter 26).
+        tableSet(&vm.globals, name, peek(0));
+        pop();
+        break;
+      }
+      case OP_SET_GLOBAL: {
+        ObjString* name = READ_STRING();
+        if (tableSet(&vm.globals, name, peek(0))) {
+          // tableSet returned "new key": the variable was never declared.
+          // Undo the accidental definition, then report the error.
+          tableDelete(&vm.globals, name);
+          runtimeError("Undefined variable '%s'.", name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
       case OP_EQUAL: {
         Value b = pop();
         Value a = pop();
@@ -154,9 +203,13 @@ static InterpretResult run(void) {
         }
         push(NUMBER_VAL(-AS_NUMBER(pop())));
         break;
-      case OP_RETURN: {
+      case OP_PRINT: {
         printValue(pop());
         printf("\n");
+        break;
+      }
+      case OP_RETURN: {
+        // Exit interpreter.
         return INTERPRET_OK;
       }
     }
@@ -164,6 +217,7 @@ static InterpretResult run(void) {
 
 #undef READ_BYTE
 #undef READ_CONSTANT
+#undef READ_STRING
 #undef BINARY_OP
 }
 

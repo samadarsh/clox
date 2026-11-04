@@ -44,17 +44,19 @@ When a milestone is done, tick its checkbox in README.md.
 
 ```
 src/                interpreter source, one .c/.h pair per book module
-tests/unit/         C unit tests (chunk, VM stack, scanner, values/objects)
+tests/unit/         C unit tests (chunk, VM stack, scanner, values/objects, table)
 tests/lox/          official .lox tests, mirroring upstream test/ paths
 tests/custom/       our own .lox tests (see tests/custom/README.md)
 tests/cli_test.sh   REPL and exit-code tests
 tests/run_tests.py  runner for "// expect: ..." style tests (same rules as test.dart)
 compile_flags.txt   tells the editor's clangd where the headers are
+tools/upstream_tests.py  lists the official tests a chapter should pass
 ```
 
-To find which official tests a chapter should pass, read the `c("chapNN_...")`
-entries in upstream `tool/bin/test.dart`. Then run the whole upstream suite
-against the build to see what actually passes.
+To find which official tests a chapter should pass, clone upstream and run
+`python3 tools/upstream_tests.py <clone> chapNN_name`. It applies the rules in
+upstream `tool/bin/test.dart`. Every listed test must pass. Also run the whole
+upstream suite against the build to catch anything extra that passes.
 
 ## Commands
 

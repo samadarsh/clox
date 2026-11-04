@@ -1,3 +1,0 @@
-// Both are falsey, but they are still different values.
-nil == false
-// expect: false

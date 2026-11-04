@@ -11,14 +11,15 @@ A test is added only once clox passes it.
 | Milestone | Added |
 |---|---|
 | 2 | `expressions/evaluate.lox`, `number/leading_dot.lox`, `string/unterminated.lox` |
-| 3 | none: upstream's runner lists only `evaluate.lox` for chapters 18–19. The `operator/` type-error tests need `;` (chapter 21), so they're ported to `tests/custom/runtime_error/` for now |
+| 3 | none: upstream's runner lists only `evaluate.lox` for chapters 18–19 |
+| 4 | all 72 that upstream's `chap22_local` suite expects; `expressions/evaluate.lox` removed, as upstream skips `test/expressions` from chapter 21 on |
 
-Most official tests use `print` and statements, which arrive in chapter 21
-(milestone 4). Until then, only these three pass.
+The current set is exactly what `tools/upstream_tests.py <clone> chap22_local`
+prints. Running the *whole* upstream suite also gives exactly 72 passes, so
+nothing passes beyond what the book expects at this chapter.
 
-`expressions/` is only for the chapters before statements exist. From chapter
-21 onwards, upstream's runner skips it (`earlyChapters` in `tool/bin/test.dart`),
-and so will we.
+Still to come: control flow (`if`, `while`, `for`, `and`/`or`) in milestone 5,
+functions and closures in 6, classes in 8.
 
 Run one file or folder with:
 

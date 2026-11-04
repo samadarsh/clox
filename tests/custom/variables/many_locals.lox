@@ -1,0 +1,7 @@
+// Locals get stack slots 0, 1, 2... in declaration order.
+{
+  var a = 1; var b = 2; var c = 3; var d = 4; var e = 5;
+  print a + b + c + d + e; // expect: 15
+  { var f = 6; print e + f; } // expect: 11
+  print a; // expect: 1
+}

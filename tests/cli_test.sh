@@ -42,18 +42,26 @@ nl='
 # A compile error is reported but the REPL keeps going.
 # Each REPL line is compiled on its own, starting from line 1. fgets keeps the
 # line's '\n', which the scanner counts, so an error "at end" says line 2.
-printf '1 + 2 * 3\n(1 + 2\n-4 / 2\n' > "$TMP/input"
+printf 'print 1 + 2 * 3;\nprint (1 + 2\nprint -4 / 2;\n' > "$TMP/input"
 echo "\"$CLOX\" < \"$TMP/input\"" > "$TMP/cmd"
 check "repl evaluates lines and survives errors" 0 \
   "> 7${nl}> > -2${nl}> " \
   "[line 2] Error at end: Expect ')' after expression."
+
+# Globals live in the VM, not in one line's chunk, so they persist between
+# REPL lines. A runtime error doesn't end the REPL either.
+printf 'var a = "one";\nprint b;\nvar b = a + "two";\nprint b;\n' > "$TMP/input"
+echo "\"$CLOX\" < \"$TMP/input\"" > "$TMP/cmd"
+check "repl keeps globals between lines" 0 \
+  "> > > > onetwo${nl}> " \
+  "Undefined variable 'b'.${nl}[line 1] in script"
 
 # Empty input: just the prompt, then the newline printed on EOF.
 echo "\"$CLOX\" < /dev/null" > "$TMP/cmd"
 check "repl exits cleanly on immediate EOF" 0 "> " ""
 
 # Running a file.
-printf '(1 + 2) * 3\n' > "$TMP/ok.lox"
+printf 'print (1 + 2) * 3;\n' > "$TMP/ok.lox"
 echo "\"$CLOX\" \"$TMP/ok.lox\"" > "$TMP/cmd"
 check "runs a file" 0 "9" ""
 
@@ -63,7 +71,7 @@ echo "\"$CLOX\" \"$TMP/bad.lox\"" > "$TMP/cmd"
 check "compile error exits 65" 65 "" "[line 1] Error at end: Expect expression."
 
 # Runtime error in a file: message, then the line, exit 70.
-printf '1 +\n"a"\n' > "$TMP/rt.lox"
+printf '1 +\n"a";\n' > "$TMP/rt.lox"
 echo "\"$CLOX\" \"$TMP/rt.lox\"" > "$TMP/cmd"
 check "runtime error exits 70" 70 "" \
   "Operands must be two numbers or two strings.${nl}[line 2] in script"

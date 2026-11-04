@@ -1,3 +1,0 @@
-// * binds tighter than +, so this is 1 + (2 * 3).
-1 + 2 * 3
-// expect: 7
