@@ -89,7 +89,7 @@ python3 tests/run_tests.py build/debug/clox tests/lox/<dir>   # one suite
   reachable from a root. A pointer held only in a C local variable is NOT a
   root. Push such objects on the VM stack (or otherwise make them reachable)
   before the next allocation, as concatenate(), allocateString(),
-  addConstant() and defineNative() do. `make test-stress` catches violations.
+  addConstant(), defineNative() and bindMethod() do. `make test-stress` catches violations.
 - LeakSanitizer doesn't run on macOS. Before asking to commit a milestone
   that touches memory, run `make test-asan` in a Linux container (Ubuntu with
   clang, make and python3), not only on the Mac.

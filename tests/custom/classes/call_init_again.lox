@@ -1,0 +1,26 @@
+// init is an ordinary method too: it can be called again on an existing
+// instance. It runs on that same instance (no new object is made) and
+// returns it.
+class Account {
+  init(owner) {
+    this.owner = owner;
+    this.balance = 0;
+    print "init " + owner;
+  }
+}
+
+var a = Account("ann"); // expect: init ann
+a.balance = 50;
+
+var again = a.init("bea"); // expect: init bea
+print again == a; // expect: true
+print a.owner; // expect: bea
+print a.balance; // expect: 0
+
+// Through a bound method, too.
+var reinit = a.init;
+reinit("cal"); // expect: init cal
+print a.owner; // expect: cal
+
+// The argument count is still checked.
+a.init(); // expect runtime error: Expected 1 arguments but got 0.

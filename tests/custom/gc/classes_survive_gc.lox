@@ -1,0 +1,65 @@
+// Every new object type must keep what it points to alive:
+//   instance     -> its class, its field names and values
+//   class        -> its name, its methods table (copied-down ones included)
+//   bound method -> its receiver and its method closure
+// Under `make test-stress` a collection runs before every allocation, so a
+// missing mark in blackenObject() becomes a use-after-free right here.
+class Node {
+  init(value, next) {
+    this.value = value;
+    this.next = next;
+  }
+
+  sum() {
+    if (this.next == nil) return this.value;
+    return this.value + this.next.sum();
+  }
+}
+
+class Labeled < Node {
+  init(value, next) {
+    super.init(value, next);
+    this.label = "n" + "ode";   // a string built at runtime, held only by a field
+  }
+}
+
+// A linked list reachable only through one global: every node, field and
+// label must survive the garbage made below.
+var list = nil;
+for (var i = 1; i <= 50; i = i + 1) {
+  list = Labeled(i, list);
+}
+
+// Lots of garbage: instances, bound methods and strings dropped at once.
+for (var i = 0; i < 200; i = i + 1) {
+  var temp = Node(i, nil);
+  var bound = temp.sum;
+  temp.extra = "x" + "y";
+  bound();
+}
+
+print list.sum(); // expect: 1275
+print list.label; // expect: node
+
+// A bound method is the only thing keeping its instance alive.
+var saved;
+{
+  var only = Labeled(7, nil);
+  saved = only.sum;
+}
+for (var i = 0; i < 100; i = i + 1) {
+  var garbage = Node(i, nil);
+}
+print saved(); // expect: 7
+
+// A class whose only reference is the instance it made: copied-down
+// methods (from Node) and its own init must stay reachable through it.
+var orphan;
+{
+  class Local < Labeled {
+    double() { return this.sum() * 2; }
+  }
+  orphan = Local(21, nil);
+}
+print orphan.double(); // expect: 42
+print orphan; // expect: Local instance

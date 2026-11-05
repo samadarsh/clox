@@ -28,6 +28,8 @@ typedef struct {
   Value* stackTop;        // points one past the top item (the next free slot)
   Table globals;          // global variables: name -> value
   Table strings;          // every string, for interning (used as a set)
+  ObjString* initString;  // the interned string "init", kept so every
+                          // class call doesn't have to create it again
   ObjUpvalue* openUpvalues; // upvalues still pointing into the stack, sorted
                             // by stack slot, highest slot first
 

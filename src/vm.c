@@ -81,12 +81,19 @@ void initVM(void) {
   initTable(&vm.globals);
   initTable(&vm.strings);
 
+  // Set to NULL first: copyString can run the GC, which marks initString
+  // as a root, so it must never hold an uninitialized pointer.
+  vm.initString = NULL;
+  vm.initString = copyString("init", 4);
+
   defineNative("clock", clockNative);
 }
 
 void freeVM(void) {
   freeTable(&vm.globals);
   freeTable(&vm.strings);
+  // The string itself is freed with every other object by freeObjects().
+  vm.initString = NULL;
   freeObjects();
 }
 
@@ -133,6 +140,31 @@ static bool call(ObjClosure* closure, int argCount) {
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
+      case OBJ_BOUND_METHOD: {
+        // The callee's stack slot (slot 0 of the new frame) gets the
+        // receiver, so inside the method `this` is that instance.
+        ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+        vm.stackTop[-argCount - 1] = bound->receiver;
+        return call(bound->method, argCount);
+      }
+      case OBJ_CLASS: {
+        // Calling a class makes an instance. It replaces the class in the
+        // callee slot, so it becomes `this` if there's an init() to run.
+        // (The class is still on the stack while newInstance allocates, and
+        // the instance is on the stack right after, so the GC sees both.)
+        ObjClass* klass = AS_CLASS(callee);
+        vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
+        Value initializer;
+        if (tableGet(&klass->methods, vm.initString,
+                     &initializer)) {
+          return call(AS_CLOSURE(initializer), argCount);
+        } else if (argCount != 0) {
+          runtimeError("Expected 0 arguments but got %d.",
+                       argCount);
+          return false;
+        }
+        return true;
+      }
       case OBJ_CLOSURE:
         return call(AS_CLOSURE(callee), argCount);
       case OBJ_NATIVE: {
@@ -150,6 +182,60 @@ static bool callValue(Value callee, int argCount) {
   }
   runtimeError("Can only call functions and classes.");
   return false;
+}
+
+// Calls the method `name` of `klass` directly, without making a bound method.
+// The receiver is already in the callee slot.
+static bool invokeFromClass(ObjClass* klass, ObjString* name,
+                            int argCount) {
+  Value method;
+  if (!tableGet(&klass->methods, name, &method)) {
+    runtimeError("Undefined property '%s'.", name->chars);
+    return false;
+  }
+  return call(AS_CLOSURE(method), argCount);
+}
+
+// OP_INVOKE: `receiver.name(args)` in one instruction. The receiver is below
+// the arguments, exactly where `this` (slot 0) has to be, so no bound method
+// is needed.
+static bool invoke(ObjString* name, int argCount) {
+  Value receiver = peek(argCount);
+
+  if (!IS_INSTANCE(receiver)) {
+    runtimeError("Only instances have methods.");
+    return false;
+  }
+
+  ObjInstance* instance = AS_INSTANCE(receiver);
+
+  // A field with this name wins over a method (it may hold a function).
+  // Put it in the callee slot and call it like any other value.
+  Value value;
+  if (tableGet(&instance->fields, name, &value)) {
+    vm.stackTop[-argCount - 1] = value;
+    return callValue(value, argCount);
+  }
+
+  return invokeFromClass(instance->klass, name, argCount);
+}
+
+// Replaces the instance on top of the stack with a bound method for `name`:
+// the method plus the instance it was taken from.
+static bool bindMethod(ObjClass* klass, ObjString* name) {
+  Value method;
+  if (!tableGet(&klass->methods, name, &method)) {
+    runtimeError("Undefined property '%s'.", name->chars);
+    return false;
+  }
+
+  // The receiver is still on the stack (peek, not pop) while
+  // newBoundMethod allocates, so the GC can't free it.
+  ObjBoundMethod* bound = newBoundMethod(peek(0),
+                                         AS_CLOSURE(method));
+  pop();
+  push(OBJ_VAL(bound));
+  return true;
 }
 
 // Returns the upvalue for the stack slot `local`, creating it if needed. If
@@ -192,6 +278,15 @@ static void closeUpvalues(Value* last) {
     upvalue->location = &upvalue->closed;   // ...and point at the copy
     vm.openUpvalues = upvalue->next;
   }
+}
+
+// OP_METHOD: the closure is on top of the stack, the class just below it.
+// Both stay on the stack while tableSet may allocate.
+static void defineMethod(ObjString* name) {
+  Value method = peek(0);
+  ObjClass* klass = AS_CLASS(peek(1));
+  tableSet(&klass->methods, name, method);
+  pop();
 }
 
 // Lox's rule: nil and false are falsey; every other value is truthy,
@@ -326,6 +421,56 @@ static InterpretResult run(void) {
         *frame->closure->upvalues[slot]->location = peek(0);
         break;
       }
+      case OP_GET_PROPERTY: {
+        if (!IS_INSTANCE(peek(0))) {
+          runtimeError("Only instances have properties.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ObjInstance* instance = AS_INSTANCE(peek(0));
+        ObjString* name = READ_STRING();
+
+        // Fields first: a field shadows a method with the same name.
+        Value value;
+        if (tableGet(&instance->fields, name, &value)) {
+          pop(); // Instance.
+          push(value);
+          break;
+        }
+
+        // Not a field, so it must be a method: make a bound method.
+        if (!bindMethod(instance->klass, name)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
+      case OP_SET_PROPERTY: {
+        // Stack: [instance][value]. Setting a field that doesn't exist yet
+        // simply creates it.
+        if (!IS_INSTANCE(peek(1))) {
+          runtimeError("Only instances have fields.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ObjInstance* instance = AS_INSTANCE(peek(1));
+        tableSet(&instance->fields, READ_STRING(), peek(0));
+        // Assignment is an expression whose result is the value: pop the
+        // value and the instance, then push the value back.
+        Value value = pop();
+        pop();
+        push(value);
+        break;
+      }
+      case OP_GET_SUPER: {
+        // Stack: [this][superclass]. Bind the superclass's method to this.
+        ObjString* name = READ_STRING();
+        ObjClass* superclass = AS_CLASS(pop());
+
+        if (!bindMethod(superclass, name)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
       case OP_EQUAL: {
         Value b = pop();
         Value a = pop();
@@ -397,6 +542,28 @@ static InterpretResult run(void) {
         frame = &vm.frames[vm.frameCount - 1];
         break;
       }
+      case OP_INVOKE: {
+        ObjString* method = READ_STRING();
+        int argCount = READ_BYTE();
+        if (!invoke(method, argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        frame = &vm.frames[vm.frameCount - 1];
+        break;
+      }
+      case OP_SUPER_INVOKE: {
+        // Stack: [this][args...][superclass]. Like OP_INVOKE, but the
+        // method is looked up in the superclass, skipping the receiver's
+        // own class and its fields.
+        ObjString* method = READ_STRING();
+        int argCount = READ_BYTE();
+        ObjClass* superclass = AS_CLASS(pop());
+        if (!invokeFromClass(superclass, method, argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        frame = &vm.frames[vm.frameCount - 1];
+        break;
+      }
       case OP_CLOSURE: {
         ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
         ObjClosure* closure = newClosure(function);
@@ -439,6 +606,29 @@ static InterpretResult run(void) {
         frame = &vm.frames[vm.frameCount - 1];
         break;
       }
+      case OP_CLASS:
+        push(OBJ_VAL(newClass(READ_STRING())));
+        break;
+      case OP_INHERIT: {
+        // Stack: [superclass][subclass]. "Copy-down" inheritance: copy all
+        // of the superclass's methods into the subclass now. The subclass's
+        // own methods are added afterwards (OP_METHOD) and overwrite any
+        // with the same name, which is what overriding means.
+        Value superclass = peek(1);
+        if (!IS_CLASS(superclass)) {
+          runtimeError("Superclass must be a class.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ObjClass* subclass = AS_CLASS(peek(0));
+        tableAddAll(&AS_CLASS(superclass)->methods,
+                    &subclass->methods);
+        pop(); // Subclass.
+        break;
+      }
+      case OP_METHOD:
+        defineMethod(READ_STRING());
+        break;
     }
   }
 

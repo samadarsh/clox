@@ -1,0 +1,64 @@
+// Each level overrides describe() and calls super.describe(), so the chain
+// runs top to bottom. `super` is fixed per class when the code is compiled:
+// in C it means B, in B it means A, whatever the receiver's class is.
+class A {
+  init(name) {
+    this.name = name;
+    this.levels = "A";
+  }
+
+  describe() {
+    return "A(" + this.name + ")";
+  }
+
+  who() {
+    return "A.who";
+  }
+}
+
+class B < A {
+  init(name) {
+    super.init(name);
+    this.levels = this.levels + "B";
+  }
+
+  describe() {
+    return "B[" + super.describe() + "]";
+  }
+}
+
+class C < B {
+  init(name) {
+    super.init(name);
+    this.levels = this.levels + "C";
+  }
+
+  describe() {
+    return "C{" + super.describe() + "}";
+  }
+
+  // Not overridden in B: super.who() finds A's copy, which was copied down
+  // into B when B was created.
+  who() {
+    return "C via " + super.who();
+  }
+}
+
+var c = C("x");
+print c.describe(); // expect: C{B[A(x)]}
+print c.levels; // expect: ABC
+print c.who(); // expect: C via A.who
+
+// The same method through each class: the receiver's class picks the
+// override, and super calls go up from the class where they are written.
+print A("a").describe(); // expect: A(a)
+print B("b").describe(); // expect: B[A(b)]
+
+// super.method without calling it gives a bound method with the same `this`.
+class D < C {
+  getParent() {
+    return super.describe;
+  }
+}
+var parent = D("d").getParent();
+print parent(); // expect: C{B[A(d)]}

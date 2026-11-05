@@ -64,6 +64,8 @@ typedef struct {
 
 typedef enum {
   TYPE_FUNCTION,
+  TYPE_INITIALIZER,  // a method named init
+  TYPE_METHOD,
   TYPE_SCRIPT
 } FunctionType;
 
@@ -85,8 +87,18 @@ typedef struct Compiler {
   int scopeDepth;   // 0 = top level of the function, 1 = first { block }, ...
 } Compiler;
 
+// One per class being compiled, linked outwards like Compiler, because a
+// class can be declared inside a method of another class. It answers two
+// questions: are we inside a class at all (so `this` is allowed), and does
+// this class have a superclass (so `super` is allowed)?
+typedef struct ClassCompiler {
+  struct ClassCompiler* enclosing;
+  bool hasSuperclass;
+} ClassCompiler;
+
 Parser parser;
 Compiler* current = NULL;
+ClassCompiler* currentClass = NULL;
 
 // Each function has its own chunk; we write into the current function's.
 static Chunk* currentChunk(void) {
@@ -187,9 +199,16 @@ static int emitJump(uint8_t instruction) {
   return currentChunk()->count - 2;
 }
 
-// The implicit return at the end of every function body: return nil.
+// The implicit return at the end of every function body: return nil. An
+// initializer returns `this` instead (slot 0), so `Foo()` and `foo.init()`
+// both give back the instance.
 static void emitReturn(void) {
-  emitByte(OP_NIL);
+  if (current->type == TYPE_INITIALIZER) {
+    emitBytes(OP_GET_LOCAL, 0);
+  } else {
+    emitByte(OP_NIL);
+  }
+
   emitByte(OP_RETURN);
 }
 
@@ -238,13 +257,20 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
                                          parser.previous.length);
   }
 
-  // Slot 0 of every frame holds the function being called. Claim it here
-  // with an empty name, so user code can never refer to it.
+  // Slot 0 of every frame holds the function being called. Claim it here.
+  // In a method, the VM puts the receiver there instead, so the slot is
+  // named "this", and `this` compiles to an ordinary local read of slot 0.
+  // In a plain function it gets an empty name, so user code can't reach it.
   Local* local = &current->locals[current->localCount++];
   local->depth = 0;
   local->isCaptured = false;
-  local->name.start = "";
-  local->name.length = 0;
+  if (type != TYPE_FUNCTION) {
+    local->name.start = "this";
+    local->name.length = 4;
+  } else {
+    local->name.start = "";
+    local->name.length = 0;
+  }
 }
 
 static ObjFunction* endCompiler(void) {
@@ -493,6 +519,24 @@ static void call(bool canAssign) {
   emitBytes(OP_CALL, argCount);
 }
 
+// `.` after an expression: a property get, a property set, or (when a '('
+// follows straight away) a method call, compiled as one OP_INVOKE.
+static void dot(bool canAssign) {
+  consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
+  uint8_t name = identifierConstant(&parser.previous);
+
+  if (canAssign && match(TOKEN_EQUAL)) {
+    expression();
+    emitBytes(OP_SET_PROPERTY, name);
+  } else if (match(TOKEN_LEFT_PAREN)) {
+    uint8_t argCount = argumentList();
+    emitBytes(OP_INVOKE, name);
+    emitByte(argCount);
+  } else {
+    emitBytes(OP_GET_PROPERTY, name);
+  }
+}
+
 static void literal(bool canAssign) {
   (void)canAssign;
   switch (parser.previous.type) {
@@ -568,6 +612,55 @@ static void variable(bool canAssign) {
   namedVariable(parser.previous, canAssign);
 }
 
+// A token that doesn't come from the source, for the hidden variables
+// "this" and "super". The text is a C string literal, which lives for the
+// whole program, so pointing a Token at it is safe.
+static Token syntheticToken(const char* text) {
+  Token token;
+  token.start = text;
+  token.length = (int)strlen(text);
+  return token;
+}
+
+// super.method or super.method(args). The superclass is known when the code
+// is compiled: it's in the hidden local "super", which the methods capture as
+// an upvalue. The receiver is `this`, so the method runs on the same object.
+static void super_(bool canAssign) {
+  (void)canAssign;
+  if (currentClass == NULL) {
+    error("Can't use 'super' outside of a class.");
+  } else if (!currentClass->hasSuperclass) {
+    error("Can't use 'super' in a class with no superclass.");
+  }
+
+  consume(TOKEN_DOT, "Expect '.' after 'super'.");
+  consume(TOKEN_IDENTIFIER, "Expect superclass method name.");
+  uint8_t name = identifierConstant(&parser.previous);
+
+  namedVariable(syntheticToken("this"), false);
+  if (match(TOKEN_LEFT_PAREN)) {
+    uint8_t argCount = argumentList();
+    namedVariable(syntheticToken("super"), false);
+    emitBytes(OP_SUPER_INVOKE, name);
+    emitByte(argCount);
+  } else {
+    namedVariable(syntheticToken("super"), false);
+    emitBytes(OP_GET_SUPER, name);
+  }
+}
+
+// `this` is just the local variable in slot 0 (see initCompiler). Inside a
+// function nested in a method, it is captured like any other local.
+static void this_(bool canAssign) {
+  (void)canAssign;
+  if (currentClass == NULL) {
+    error("Can't use 'this' outside of a class.");
+    return;
+  }
+
+  variable(false);
+}
+
 static void unary(bool canAssign) {
   (void)canAssign;
   TokenType operatorType = parser.previous.type;
@@ -590,7 +683,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]           = {NULL,     dot,    PREC_CALL},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -618,8 +711,8 @@ ParseRule rules[] = {
   [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]         = {super_,   NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {this_,    NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
@@ -707,6 +800,73 @@ static void function(FunctionType type) {
     emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
     emitByte(compiler.upvalues[i].index);
   }
+}
+
+// One method in a class body. The class is on top of the stack (classDeclaration
+// put it there); OP_METHOD pops the closure and adds it to that class.
+static void method(void) {
+  consume(TOKEN_IDENTIFIER, "Expect method name.");
+  uint8_t constant = identifierConstant(&parser.previous);
+
+  FunctionType type = TYPE_METHOD;
+  if (parser.previous.length == 4 &&
+      memcmp(parser.previous.start, "init", 4) == 0) {
+    type = TYPE_INITIALIZER;
+  }
+
+  function(type);
+  emitBytes(OP_METHOD, constant);
+}
+
+static void classDeclaration(void) {
+  consume(TOKEN_IDENTIFIER, "Expect class name.");
+  Token className = parser.previous;
+  uint8_t nameConstant = identifierConstant(&parser.previous);
+  declareVariable();
+
+  emitBytes(OP_CLASS, nameConstant);
+  defineVariable(nameConstant);
+
+  ClassCompiler classCompiler;
+  classCompiler.hasSuperclass = false;
+  classCompiler.enclosing = currentClass;
+  currentClass = &classCompiler;
+
+  if (match(TOKEN_LESS)) {
+    consume(TOKEN_IDENTIFIER, "Expect superclass name.");
+    variable(false);
+
+    if (identifiersEqual(&className, &parser.previous)) {
+      error("A class can't inherit from itself.");
+    }
+
+    // Store the superclass in a hidden local named "super", in a new scope
+    // around the class body. Every method that uses `super` captures it as
+    // an upvalue, so the superclass is fixed when the class is declared.
+    // (The scope means two classes in one block each get their own "super".)
+    beginScope();
+    addLocal(syntheticToken("super"));
+    defineVariable(0);
+
+    namedVariable(className, false);
+    emitByte(OP_INHERIT);
+    classCompiler.hasSuperclass = true;
+  }
+
+  // Load the class again so the OP_METHODs below can find it on the stack.
+  namedVariable(className, false);
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    method();
+  }
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+  emitByte(OP_POP);
+
+  if (classCompiler.hasSuperclass) {
+    endScope();
+  }
+
+  currentClass = currentClass->enclosing;
 }
 
 static void funDeclaration(void) {
@@ -866,6 +1026,10 @@ static void returnStatement(void) {
   if (match(TOKEN_SEMICOLON)) {
     emitReturn();
   } else {
+    if (current->type == TYPE_INITIALIZER) {
+      error("Can't return a value from an initializer.");
+    }
+
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
     emitByte(OP_RETURN);
@@ -888,7 +1052,9 @@ static void whileStatement(void) {
 }
 
 static void declaration(void) {
-  if (match(TOKEN_FUN)) {
+  if (match(TOKEN_CLASS)) {
+    classDeclaration();
+  } else if (match(TOKEN_FUN)) {
     funDeclaration();
   } else if (match(TOKEN_VAR)) {
     varDeclaration();

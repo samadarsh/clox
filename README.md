@@ -21,7 +21,7 @@ macOS.
 - [x] **5. Control flow**: `if`, `while`, `for`, `and` and `or` (ch. 23)
 - [x] **6. Functions and closures**: call frames, native functions and upvalues (ch. 24–25)
 - [x] **7. Garbage collector**: mark-sweep with tri-color marking (ch. 26)
-- [ ] **8. Classes and inheritance**: instances, methods, initializers and `super` (ch. 27–29)
+- [x] **8. Classes and inheritance**: instances, methods, initializers and `super` (ch. 27–29)
 - [ ] **9. Speed and polish**: optimization, benchmarks vs Python, a demo and a WebAssembly playground (ch. 30)
 
 ## Building
@@ -43,10 +43,10 @@ make gclog-stress # the same, collecting before every allocation
 ./build/release/clox script.lox   # run a file
 ```
 
-So far (milestone 6), clox runs everything in Lox except classes: variables,
-blocks, `if`/`else`, `while`, `for`, `and`/`or`, functions with `return`,
-recursion, closures, and the native function `clock()`. Classes arrive in
-milestone 8.
+Since milestone 8, clox runs the whole Lox language: variables, blocks,
+`if`/`else`, `while`, `for`, `and`/`or`, functions with `return`, recursion,
+closures, classes with fields, methods and `init`, inheritance with `super`,
+and the native function `clock()`. Memory is managed by a garbage collector.
 
 ```
 > fun makeCounter() { var count = 0; fun inc() { count = count + 1; print count; } return inc; }
@@ -55,7 +55,17 @@ milestone 8.
 1
 > c();
 2
+> class Animal { init(name) { this.name = name; } speak() { return this.name + " makes a sound"; } }
+> class Dog < Animal { speak() { return super.speak() + ": woof"; } }
+> var rex = Dog("Rex");
+> print rex.speak();
+Rex makes a sound: woof
+> var f = rex.speak;
+> print f();
+Rex makes a sound: woof
 ```
+
+`tests/custom/programs/shapes.lox` is a longer example.
 
 Runtime errors print a stack trace, innermost call first:
 

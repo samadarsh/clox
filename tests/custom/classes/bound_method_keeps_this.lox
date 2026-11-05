@@ -1,0 +1,37 @@
+// Reading a method without calling it makes a bound method: the method plus
+// the instance it came from. Calling it later still uses that instance.
+class Person {
+  init(name) {
+    this.name = name;
+  }
+
+  greet(greeting) {
+    return greeting + ", I'm " + this.name;
+  }
+}
+
+var alice = Person("Alice");
+var bob = Person("Bob");
+
+var f = alice.greet;
+print f; // expect: <fn greet>
+print f("Hi"); // expect: Hi, I'm Alice
+
+// Stored in a field of a different object, it still remembers alice.
+bob.saved = alice.greet;
+print bob.saved("Hello"); // expect: Hello, I'm Alice
+
+// Changing alice's field later is seen through the bound method, since it
+// holds the instance itself, not a copy.
+alice.name = "Alicia";
+print f("Hey"); // expect: Hey, I'm Alicia
+
+// Passed to a function and called there.
+fun callLater(callback) {
+  return callback("Yo");
+}
+print callLater(bob.greet); // expect: Yo, I'm Bob
+
+// A bound method survives its instance's variable being reassigned.
+var g = Person("Carol").greet;
+print g("Hi"); // expect: Hi, I'm Carol

@@ -15,7 +15,8 @@ explanation.
 | `control_flow/` | nested `if`/`else`, short-circuit `and`/`or` (the right side must not run), every `for` clause missing, zero-iteration loops, stack balance over 1000 iterations, jumps over more than 255 bytes |
 | `functions/` | recursion, mutual recursion, the exact call-depth limit (63 calls OK, 64 is "Stack overflow."), wrong argument counts, calling non-functions, errors in nested calls, functions as values, `clock()` |
 | `closures/` | the counter walkthrough, two closures sharing one variable, loop variable capture, closing at block end and at return, three-level capture |
-| `gc/` | lots of garbage (string building in loops), closures and open/closed upvalues surviving collections, interned strings freed and recreated, GC during deep calls and during compiling |
+| `gc/` | lots of garbage (string building in loops), closures and open/closed upvalues surviving collections, interned strings freed and recreated, GC during deep calls and during compiling, instances/classes/bound methods keeping what they point to alive |
+| `classes/` | fields added after creation, bound methods keeping `this` (stored in fields, passed as callbacks), `init` returning `this` (also on early `return;`), calling `init` again directly, returning a value from `init` (error), inheriting from an instance, a string or itself (errors), `super` at every level of a 3-class chain, the constant limit for methods (127 fit, 128 is "Too many constants in one chunk.") |
 | `programs/` | longer programs using many features together |
 
 The GC tests do their real work under `make test-stress`, which collects before

@@ -1,0 +1,24 @@
+// init() always returns the instance, whatever it does.
+class Box {
+  init(value) {
+    this.value = value;
+    // An early plain `return;` still returns `this`.
+    if (value == nil) return;
+    this.filled = true;
+  }
+}
+
+var b = Box(1);
+print b.filled; // expect: true
+
+var empty = Box(nil);
+print empty; // expect: Box instance
+print empty.value; // expect: nil
+
+// Calling init directly also returns the instance.
+print b.init(2) == b; // expect: true
+print b.value; // expect: 2
+
+// A class without init takes no arguments.
+class Plain {}
+print Plain(); // expect: Plain instance

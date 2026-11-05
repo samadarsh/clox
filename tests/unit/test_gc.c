@@ -194,6 +194,54 @@ static void testClosuresAndUpvaluesSurvive(void) {
   endTest();
 }
 
+static int countType(ObjType type) {
+  int count = 0;
+  for (Obj* object = vm.objects; object != NULL; object = object->next) {
+    if (object->type == type) count++;
+  }
+  return count;
+}
+
+static void testClassObjectsMarkedAndFreed(void) {
+  initVM();
+  CHECK(interpret(
+      "class Base { hello() { return \"hi\"; } }\n"
+      "class Kid < Base { init() { this.field = \"f\" + \"!\"; } }\n"
+      "var keepBound = Kid().hello;\n"       // bound method -> instance, closure
+      "{ var dropped = Kid(); var b = dropped.hello; }\n"
+      "var keepInstance = Kid();\n") == INTERPRET_OK);
+  collectGarbage();
+
+  // Reachable: Base and Kid (globals), the two kept instances, one bound
+  // method. The dropped instance and its bound method are gone.
+  CHECK(countType(OBJ_CLASS) == 2);
+  CHECK(countType(OBJ_INSTANCE) == 2);
+  CHECK(countType(OBJ_BOUND_METHOD) == 1);
+
+  // What they point to survived: a field value built at runtime, and the
+  // copied-down method called through the bound method.
+  Value instance;
+  CHECK(getGlobal("keepInstance", &instance) && IS_INSTANCE(instance));
+  Value field;
+  CHECK(tableGet(&AS_INSTANCE(instance)->fields, findInterned("field"),
+                 &field));
+  CHECK(IS_STRING(field) && strcmp(AS_CSTRING(field), "f!") == 0);
+  CHECK(interpret("var r = keepBound();") == INTERPRET_OK);
+  Value r;
+  CHECK(getGlobal("r", &r) && IS_STRING(r) && strcmp(AS_CSTRING(r), "hi") == 0);
+
+  // Drop everything: the instances, bound method and classes all go.
+  CHECK(interpret("keepBound = nil; keepInstance = nil;"
+                  "Kid = nil; Base = nil;") == INTERPRET_OK);
+  collectGarbage();
+  CHECK(countType(OBJ_CLASS) == 0);
+  CHECK(countType(OBJ_INSTANCE) == 0);
+  CHECK(countType(OBJ_BOUND_METHOD) == 0);
+  // "init" is still interned: the VM keeps it as a root (vm.initString).
+  CHECK(findInterned("init") == vm.initString);
+  endTest();   // also checks every byte (fields/method tables too) came back
+}
+
 static void testGarbageLoopStaysBounded(void) {
   initVM();
   // Each batch builds a 1000-character string one character at a time:
@@ -227,6 +275,7 @@ int main(void) {
   testNextGCDoublesLiveSize();
   testGlobalsAreRoots();
   testClosuresAndUpvaluesSurvive();
+  testClassObjectsMarkedAndFreed();
   testGarbageLoopStaysBounded();
 
   if (failures > 0) {

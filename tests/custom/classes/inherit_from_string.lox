@@ -1,0 +1,5 @@
+var NotAClass = "class";
+
+{
+  class Local < NotAClass {} // expect runtime error: Superclass must be a class.
+}

@@ -18,6 +18,9 @@ typedef enum {
   OP_SET_GLOBAL,    // operand: constant index of the variable's name
   OP_GET_UPVALUE,   // operand: index into the closure's upvalue array
   OP_SET_UPVALUE,   // operand: index into the closure's upvalue array
+  OP_GET_PROPERTY,  // operand: constant index of the field or method name
+  OP_SET_PROPERTY,  // operand: constant index of the field name
+  OP_GET_SUPER,     // operand: constant index of the method name
   OP_EQUAL,
   OP_GREATER,
   OP_LESS,
@@ -32,9 +35,14 @@ typedef enum {
   OP_JUMP_IF_FALSE, // operand: 16-bit forward offset; leaves the condition on the stack
   OP_LOOP,          // operand: 16-bit backward offset
   OP_CALL,          // operand: argument count
+  OP_INVOKE,        // operands: method name constant, argument count
+  OP_SUPER_INVOKE,  // operands: method name constant, argument count
   OP_CLOSURE,       // operands: function constant, then (isLocal, index) per upvalue
   OP_CLOSE_UPVALUE,
   OP_RETURN,
+  OP_CLASS,         // operand: constant index of the class name
+  OP_INHERIT,
+  OP_METHOD,        // operand: constant index of the method name
 } OpCode;
 
 // A chunk is a sequence of bytecode plus the data it needs.

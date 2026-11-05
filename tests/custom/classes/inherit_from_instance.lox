@@ -1,0 +1,6 @@
+// Only a class can be a superclass. This is checked at runtime (OP_INHERIT),
+// because the superclass is an expression whose value isn't known until then.
+class Base {}
+var notAClass = Base();
+
+class Derived < notAClass {} // expect runtime error: Superclass must be a class.

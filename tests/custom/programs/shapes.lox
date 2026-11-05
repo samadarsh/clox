@@ -1,0 +1,142 @@
+// Classes and inheritance together: fields set in init, methods, overriding,
+// super calls, bound methods passed around as callbacks, and a closure
+// capturing `this`.
+class Shape {
+  init(name) {
+    this.name = name;
+  }
+
+  area() {
+    return 0;
+  }
+
+  describe() {
+    return this.name + " with area " + toString(this.area());
+  }
+}
+
+class Rectangle < Shape {
+  init(width, height) {
+    super.init("rectangle");
+    this.width = width;
+    this.height = height;
+  }
+
+  area() {
+    return this.width * this.height;
+  }
+}
+
+class Square < Rectangle {
+  init(side) {
+    super.init(side, side);
+    this.name = "square";
+  }
+
+  describe() {
+    return "a " + super.describe();
+  }
+}
+
+class Circle < Shape {
+  init(radius) {
+    super.init("circle");
+    this.radius = radius;
+  }
+
+  area() {
+    return 3 * this.radius * this.radius;   // pi is about 3, for round output
+  }
+}
+
+// Lox has no number-to-string conversion, so build one for whole numbers.
+fun toString(n) {
+  if (n == 0) return "0";
+  var digits = "";
+  while (n > 0) {
+    var digit = n - 10 * floor(n / 10);
+    digits = digitChar(digit) + digits;
+    n = (n - digit) / 10;
+  }
+  return digits;
+}
+
+fun floor(x) {
+  var i = 0;
+  while (i + 1 <= x) i = i + 1;
+  return i;
+}
+
+fun digitChar(d) {
+  if (d == 0) return "0"; if (d == 1) return "1"; if (d == 2) return "2";
+  if (d == 3) return "3"; if (d == 4) return "4"; if (d == 5) return "5";
+  if (d == 6) return "6"; if (d == 7) return "7"; if (d == 8) return "8";
+  return "9";
+}
+
+// A tiny list class, built from nodes.
+class List {
+  init() {
+    this.head = nil;
+    this.count = 0;
+  }
+
+  add(item) {
+    var node = Node(item);
+    node.next = this.head;
+    this.head = node;
+    this.count = this.count + 1;
+    return this;   // so calls can be chained
+  }
+
+  forEach(callback) {
+    var node = this.head;
+    while (node != nil) {
+      callback(node.item);
+      node = node.next;
+    }
+  }
+}
+
+class Node {
+  init(item) {
+    this.item = item;
+    this.next = nil;
+  }
+}
+
+var shapes = List().add(Circle(2)).add(Square(3)).add(Rectangle(2, 5));
+print shapes.count; // expect: 3
+
+fun show(shape) {
+  print shape.describe();
+}
+shapes.forEach(show);
+// expect: rectangle with area 10
+// expect: a square with area 9
+// expect: circle with area 12
+
+// A bound method as the callback: `this` is the totaller.
+class Totaller {
+  init() { this.total = 0; }
+  add(shape) { this.total = this.total + shape.area(); }
+}
+var totaller = Totaller();
+shapes.forEach(totaller.add);
+print totaller.total; // expect: 31
+
+// A closure inside a method captures `this`, even after the method returns.
+class Greeter {
+  init(greeting) { this.greeting = greeting; }
+  makeGreeter() {
+    fun greet(name) {
+      return this.greeting + ", " + name + "!";
+    }
+    return greet;
+  }
+}
+var hello = Greeter("Hello").makeGreeter();
+print hello("Lox"); // expect: Hello, Lox!
+
+print Square(1); // expect: Square instance
+print Square; // expect: Square

@@ -1,0 +1,31 @@
+// A class declares no fields. Every instance gets its own fields table, and
+// assigning to a field that doesn't exist yet creates it.
+class Point {}
+
+var p = Point();
+p.x = 1;
+p.y = 2;
+print p.x + p.y; // expect: 3
+
+// Fields belong to the instance, not the class: q has none of p's.
+var q = Point();
+q.z = "only on q";
+print q.z; // expect: only on q
+
+// Fields can be added from inside a method too, at any time.
+class Counter {
+  bump() {
+    this.count = this.count + 1;
+  }
+}
+var c = Counter();
+c.count = 10;
+c.bump();
+c.bump();
+print c.count; // expect: 12
+
+// Assignment is an expression: its value is the assigned value.
+print p.w = "set"; // expect: set
+
+// Reading a field that was never set is an error.
+print q.x; // expect runtime error: Undefined property 'x'.

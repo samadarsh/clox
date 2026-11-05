@@ -1,0 +1,148 @@
+// A class's method names and method functions are constants in the chunk
+// AROUND the class, and one chunk holds at most 256 constants (OP_CONSTANT
+// has a one-byte operand). Inside make(), the class uses 1 constant for its
+// name and 2 per method, so 127 methods use 255: the largest that fits.
+//
+// Each method body is its own function with its own chunk, so constants
+// inside methods don't count. Every method here has 3 constants of its own:
+// 381 more, 636 in the whole class.
+fun make() {
+  class Many {
+    m0() { return 0 + 0.25 + 0.25; }
+    m1() { return 1 + 0.25 + 0.25; }
+    m2() { return 2 + 0.25 + 0.25; }
+    m3() { return 3 + 0.25 + 0.25; }
+    m4() { return 4 + 0.25 + 0.25; }
+    m5() { return 5 + 0.25 + 0.25; }
+    m6() { return 6 + 0.25 + 0.25; }
+    m7() { return 7 + 0.25 + 0.25; }
+    m8() { return 8 + 0.25 + 0.25; }
+    m9() { return 9 + 0.25 + 0.25; }
+    m10() { return 10 + 0.25 + 0.25; }
+    m11() { return 11 + 0.25 + 0.25; }
+    m12() { return 12 + 0.25 + 0.25; }
+    m13() { return 13 + 0.25 + 0.25; }
+    m14() { return 14 + 0.25 + 0.25; }
+    m15() { return 15 + 0.25 + 0.25; }
+    m16() { return 16 + 0.25 + 0.25; }
+    m17() { return 17 + 0.25 + 0.25; }
+    m18() { return 18 + 0.25 + 0.25; }
+    m19() { return 19 + 0.25 + 0.25; }
+    m20() { return 20 + 0.25 + 0.25; }
+    m21() { return 21 + 0.25 + 0.25; }
+    m22() { return 22 + 0.25 + 0.25; }
+    m23() { return 23 + 0.25 + 0.25; }
+    m24() { return 24 + 0.25 + 0.25; }
+    m25() { return 25 + 0.25 + 0.25; }
+    m26() { return 26 + 0.25 + 0.25; }
+    m27() { return 27 + 0.25 + 0.25; }
+    m28() { return 28 + 0.25 + 0.25; }
+    m29() { return 29 + 0.25 + 0.25; }
+    m30() { return 30 + 0.25 + 0.25; }
+    m31() { return 31 + 0.25 + 0.25; }
+    m32() { return 32 + 0.25 + 0.25; }
+    m33() { return 33 + 0.25 + 0.25; }
+    m34() { return 34 + 0.25 + 0.25; }
+    m35() { return 35 + 0.25 + 0.25; }
+    m36() { return 36 + 0.25 + 0.25; }
+    m37() { return 37 + 0.25 + 0.25; }
+    m38() { return 38 + 0.25 + 0.25; }
+    m39() { return 39 + 0.25 + 0.25; }
+    m40() { return 40 + 0.25 + 0.25; }
+    m41() { return 41 + 0.25 + 0.25; }
+    m42() { return 42 + 0.25 + 0.25; }
+    m43() { return 43 + 0.25 + 0.25; }
+    m44() { return 44 + 0.25 + 0.25; }
+    m45() { return 45 + 0.25 + 0.25; }
+    m46() { return 46 + 0.25 + 0.25; }
+    m47() { return 47 + 0.25 + 0.25; }
+    m48() { return 48 + 0.25 + 0.25; }
+    m49() { return 49 + 0.25 + 0.25; }
+    m50() { return 50 + 0.25 + 0.25; }
+    m51() { return 51 + 0.25 + 0.25; }
+    m52() { return 52 + 0.25 + 0.25; }
+    m53() { return 53 + 0.25 + 0.25; }
+    m54() { return 54 + 0.25 + 0.25; }
+    m55() { return 55 + 0.25 + 0.25; }
+    m56() { return 56 + 0.25 + 0.25; }
+    m57() { return 57 + 0.25 + 0.25; }
+    m58() { return 58 + 0.25 + 0.25; }
+    m59() { return 59 + 0.25 + 0.25; }
+    m60() { return 60 + 0.25 + 0.25; }
+    m61() { return 61 + 0.25 + 0.25; }
+    m62() { return 62 + 0.25 + 0.25; }
+    m63() { return 63 + 0.25 + 0.25; }
+    m64() { return 64 + 0.25 + 0.25; }
+    m65() { return 65 + 0.25 + 0.25; }
+    m66() { return 66 + 0.25 + 0.25; }
+    m67() { return 67 + 0.25 + 0.25; }
+    m68() { return 68 + 0.25 + 0.25; }
+    m69() { return 69 + 0.25 + 0.25; }
+    m70() { return 70 + 0.25 + 0.25; }
+    m71() { return 71 + 0.25 + 0.25; }
+    m72() { return 72 + 0.25 + 0.25; }
+    m73() { return 73 + 0.25 + 0.25; }
+    m74() { return 74 + 0.25 + 0.25; }
+    m75() { return 75 + 0.25 + 0.25; }
+    m76() { return 76 + 0.25 + 0.25; }
+    m77() { return 77 + 0.25 + 0.25; }
+    m78() { return 78 + 0.25 + 0.25; }
+    m79() { return 79 + 0.25 + 0.25; }
+    m80() { return 80 + 0.25 + 0.25; }
+    m81() { return 81 + 0.25 + 0.25; }
+    m82() { return 82 + 0.25 + 0.25; }
+    m83() { return 83 + 0.25 + 0.25; }
+    m84() { return 84 + 0.25 + 0.25; }
+    m85() { return 85 + 0.25 + 0.25; }
+    m86() { return 86 + 0.25 + 0.25; }
+    m87() { return 87 + 0.25 + 0.25; }
+    m88() { return 88 + 0.25 + 0.25; }
+    m89() { return 89 + 0.25 + 0.25; }
+    m90() { return 90 + 0.25 + 0.25; }
+    m91() { return 91 + 0.25 + 0.25; }
+    m92() { return 92 + 0.25 + 0.25; }
+    m93() { return 93 + 0.25 + 0.25; }
+    m94() { return 94 + 0.25 + 0.25; }
+    m95() { return 95 + 0.25 + 0.25; }
+    m96() { return 96 + 0.25 + 0.25; }
+    m97() { return 97 + 0.25 + 0.25; }
+    m98() { return 98 + 0.25 + 0.25; }
+    m99() { return 99 + 0.25 + 0.25; }
+    m100() { return 100 + 0.25 + 0.25; }
+    m101() { return 101 + 0.25 + 0.25; }
+    m102() { return 102 + 0.25 + 0.25; }
+    m103() { return 103 + 0.25 + 0.25; }
+    m104() { return 104 + 0.25 + 0.25; }
+    m105() { return 105 + 0.25 + 0.25; }
+    m106() { return 106 + 0.25 + 0.25; }
+    m107() { return 107 + 0.25 + 0.25; }
+    m108() { return 108 + 0.25 + 0.25; }
+    m109() { return 109 + 0.25 + 0.25; }
+    m110() { return 110 + 0.25 + 0.25; }
+    m111() { return 111 + 0.25 + 0.25; }
+    m112() { return 112 + 0.25 + 0.25; }
+    m113() { return 113 + 0.25 + 0.25; }
+    m114() { return 114 + 0.25 + 0.25; }
+    m115() { return 115 + 0.25 + 0.25; }
+    m116() { return 116 + 0.25 + 0.25; }
+    m117() { return 117 + 0.25 + 0.25; }
+    m118() { return 118 + 0.25 + 0.25; }
+    m119() { return 119 + 0.25 + 0.25; }
+    m120() { return 120 + 0.25 + 0.25; }
+    m121() { return 121 + 0.25 + 0.25; }
+    m122() { return 122 + 0.25 + 0.25; }
+    m123() { return 123 + 0.25 + 0.25; }
+    m124() { return 124 + 0.25 + 0.25; }
+    m125() { return 125 + 0.25 + 0.25; }
+    m126() { return 126 + 0.25 + 0.25; }
+  }
+  return Many;
+}
+
+var many = make()();
+print many.m0(); // expect: 0.5
+print many.m64(); // expect: 64.5
+print many.m126(); // expect: 126.5
+
+// Every method is really there.
+print many.m1() + many.m2() + many.m125(); // expect: 129.5
