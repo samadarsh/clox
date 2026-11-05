@@ -1,9 +1,10 @@
 {
   "name": "clox-playground-vendor",
   "private": true,
-  "description": "Builds codemirror.js, the one-file CodeMirror 6 bundle the playground loads. Run `npm ci && npm run build` here after changing a version; the output is committed, so the site itself needs no build step.",
+  "description": "Builds codemirror.js (the one-file CodeMirror 6 bundle) and copies the Inter and JetBrains Mono web fonts into fonts/. Run `npm ci && npm run build && npm run fonts` here after changing a version; the output is committed, so the site itself needs no build step.",
   "scripts": {
-    "build": "esbuild codemirror-entry.js --bundle --format=esm --minify --legal-comments=eof --outfile=codemirror.js"
+    "build": "esbuild codemirror-entry.js --bundle --format=esm --minify --legal-comments=eof --outfile=codemirror.js",
+    "fonts": "mkdir -p fonts && cp node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2 fonts/inter-latin-variable.woff2 && cp node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2 fonts/jetbrains-mono-latin-variable.woff2 && cp node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-italic.woff2 fonts/jetbrains-mono-latin-variable-italic.woff2 && cp node_modules/@fontsource-variable/inter/LICENSE fonts/LICENSE-Inter.txt && cp node_modules/@fontsource-variable/jetbrains-mono/LICENSE fonts/LICENSE-JetBrainsMono.txt"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -16,6 +17,8 @@
     "@lezer/highlight": "1.2.5"
   },
   "devDependencies": {
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0"
   }
 }

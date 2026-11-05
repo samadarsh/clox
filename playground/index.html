@@ -4,96 +4,169 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>clox playground</title>
-  <meta name="description" content="Run Lox in your browser on clox, a bytecode VM in C compiled to WebAssembly. See the bytecode and step through it with a time-travel debugger.">
+  <meta name="description" content="A bytecode VM, running in your browser: Lox on clox, compiled from C to WebAssembly. See the bytecode and step through it with a time-travel debugger.">
   <meta name="color-scheme" content="light dark">
+  <link rel="preload" href="vendor/fonts/inter-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="vendor/fonts/jetbrains-mono-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
-  <!-- Apply a saved theme before the page draws, so it doesn't flash. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ff7a59'/%3E%3Crect x='8' y='9' width='16' height='3.4' rx='1.7' fill='%231b0e09'/%3E%3Crect x='8' y='14.3' width='12' height='3.4' rx='1.7' fill='%231b0e09'/%3E%3Crect x='8' y='19.6' width='7' height='3.4' rx='1.7' fill='%231b0e09'/%3E%3C/svg%3E">
+  <!-- Apply the saved theme and panel sizes before the page draws, so nothing jumps. -->
   <script>
     try {
       const theme = localStorage.getItem("clox-playground-theme");
       if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
     } catch (e) {}
+    // Shortcut hints show ⌘ on Apple devices and Ctrl elsewhere (style.css).
+    if (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) {
+      document.documentElement.dataset.platform = "mac";
+    }
   </script>
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <h1>clox <span>playground</span></h1>
-      <p class="tagline">
-        <a href="https://craftinginterpreters.com/the-lox-language.html">Lox</a> on a bytecode VM
-        written in C, compiled to WebAssembly · <a href="https://github.com/samadarsh/clox">source</a>
-      </p>
-    </div>
-    <div class="top-actions">
-      <button id="share" type="button" title="Copy a link to this program">Share</button>
-      <button id="theme" type="button" title="Theme: follow the system, light or dark">Theme: Auto</button>
+<body data-pane="code">
+  <!-- Icons, used with <svg><use href="#i-..."/></svg>. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M4.5 2.8v10.4c0 .6.6.9 1.1.6l8-5.2a.7.7 0 0 0 0-1.2l-8-5.2c-.5-.3-1.1 0-1.1.6Z" fill="currentColor"/></symbol>
+    <symbol id="i-bug" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4.5" y="5" width="7" height="9" rx="3.5"/><path d="M8 7.5V14M4.5 9H2M14 9h-2.5M4.6 12H2.5m11 0h-2.1M5 6 3 4m8 2 2-2M6 5c0-1.2.9-2 2-2s2 .8 2 2"/></g></symbol>
+    <symbol id="i-stop" viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor"/></symbol>
+    <symbol id="i-share" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5.5" y="5.5" width="8" height="8" rx="1.8"/><path d="M10.5 3.5v-.3c0-1-.8-1.7-1.7-1.7H4.2c-1 0-1.7.8-1.7 1.7v4.6c0 1 .8 1.7 1.7 1.7h.3"/></g></symbol>
+    <symbol id="i-theme" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 0 0-11Z" fill="currentColor"/></g></symbol>
+    <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 3.2c1.8-.8 3.7-.7 5.5.6v9.5c-1.8-1.3-3.7-1.4-5.5-.6V3.2Zm11 0c-1.8-.8-3.7-.7-5.5.6v9.5c1.8-1.3 3.7-1.4 5.5-.6V3.2Z"/></g></symbol>
+    <symbol id="i-first" viewBox="0 0 16 16"><path fill="currentColor" d="M3.5 3h1.5v10H3.5zM13 3.6v8.8a.6.6 0 0 1-.9.5L6 8.5a.6.6 0 0 1 0-1L12.1 3c.4-.2.9 0 .9.6Z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 16 16"><path fill="currentColor" d="M11.5 3.6v8.8a.6.6 0 0 1-.9.5L4.5 8.5a.6.6 0 0 1 0-1L10.6 3c.4-.2.9 0 .9.6Z"/></symbol>
+    <symbol id="i-forward" viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 3.6v8.8c0 .5.5.8.9.5l6.1-4.4a.6.6 0 0 0 0-1L5.4 3.1c-.4-.3-.9 0-.9.5Z"/></symbol>
+    <symbol id="i-last" viewBox="0 0 16 16"><path fill="currentColor" d="M11 3h1.5v10H11zM3 3.6v8.8c0 .5.5.8.9.5L10 8.5a.6.6 0 0 0 0-1L3.9 3.1c-.4-.3-.9 0-.9.5Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path fill="currentColor" d="M4 3h3v10H4zm5 0h3v10H9z"/></symbol>
+  </svg>
+
+  <header class="app-header">
+    <a class="logo" href="./" aria-label="clox playground">
+      <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" class="logo-bg"/>
+        <rect x="8" y="9" width="16" height="3.4" rx="1.7" class="logo-bar"/>
+        <rect x="8" y="14.3" width="12" height="3.4" rx="1.7" class="logo-bar"/>
+        <rect x="8" y="19.6" width="7" height="3.4" rx="1.7" class="logo-bar"/>
+      </svg>
+      <span class="wordmark">clox</span>
+    </a>
+    <p class="tagline">A bytecode VM, running in your browser</p>
+    <span class="header-spacer"></span>
+    <nav class="header-links" aria-label="Project">
+      <a href="https://github.com/samadarsh/clox"><svg class="icon"><use href="#i-github"/></svg><span>GitHub</span></a>
+      <a href="https://github.com/samadarsh/clox#readme"><svg class="icon"><use href="#i-book"/></svg><span>README</span></a>
+    </nav>
+    <div class="header-actions">
+      <button id="share" type="button" class="btn" title="Copy a link to this program">
+        <svg class="icon"><use href="#i-share"/></svg><span class="label">Share</span>
+      </button>
+      <button id="theme" type="button" class="btn icon-btn" title="Theme: follow the system" aria-label="Theme: follow the system">
+        <svg class="icon"><use href="#i-theme"/></svg><span class="label theme-label">Auto</span>
+      </button>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="pane editor-pane" aria-label="Program">
-      <div class="toolbar">
-        <select id="examples" aria-label="Example program"></select>
+  <nav class="mobile-tabs" aria-label="Panels">
+    <button type="button" data-pane-tab="code" aria-pressed="true">Code</button>
+    <button type="button" data-pane-tab="output" aria-pressed="false">Output</button>
+    <button type="button" data-pane-tab="hood" aria-pressed="false">Under the hood</button>
+  </nav>
+
+  <main id="workbench" class="workbench">
+    <section class="panel editor-panel" data-pane="code" aria-label="Program">
+      <div class="panel-header">
+        <select id="examples" class="select" aria-label="Example program"></select>
         <span class="spacer"></span>
-        <button id="run" class="primary" type="button" disabled title="Run (Ctrl+Enter / ⌘+Enter)">Run</button>
-        <button id="debug" type="button" disabled title="Run and record every step, then replay it in the Debugger tab">Debug</button>
-        <button id="stop" type="button" disabled title="Stop (Esc)">Stop</button>
+        <div class="run-buttons">
+          <button id="run" type="button" class="btn primary" disabled title="Run">
+            <svg class="icon"><use href="#i-play"/></svg><span>Run</span><kbd class="kbd-mod">↵</kbd>
+          </button>
+          <span class="debug-anchor">
+            <button id="debug" type="button" class="btn" disabled title="Run and record every step, then replay it">
+              <svg class="icon"><use href="#i-bug"/></svg><span>Debug</span><kbd class="kbd-mod kbd-shift">↵</kbd>
+            </button>
+            <div id="hint" class="hint" role="note" hidden>
+              <p><b>New here?</b> Press <b>Debug</b> to step through your program one bytecode instruction at a time, forwards and backwards.</p>
+              <button id="hint-close" type="button" class="btn small">Got it</button>
+            </div>
+          </span>
+          <button id="stop" type="button" class="btn" disabled title="Stop">
+            <svg class="icon"><use href="#i-stop"/></svg><span>Stop</span><kbd>Esc</kbd>
+          </button>
+        </div>
       </div>
       <div id="editor" class="editor"></div>
     </section>
 
-    <section class="pane side-pane" aria-label="Results">
-      <div class="tabs" role="tablist">
-        <button role="tab" id="tab-output" aria-controls="output-panel" aria-selected="true">Output</button>
-        <button role="tab" id="tab-bytecode" aria-controls="bytecode-panel" aria-selected="false">Bytecode</button>
-        <button role="tab" id="tab-debugger" aria-controls="debugger-panel" aria-selected="false">Debugger</button>
-        <span class="spacer"></span>
-        <span id="status" class="status" role="status">Loading clox…</span>
-      </div>
+    <div id="split-v" class="splitter splitter-v" role="separator" aria-orientation="vertical"
+         aria-label="Resize the editor and output" tabindex="0"></div>
 
-      <div id="output-panel" class="panel" role="tabpanel" aria-labelledby="tab-output">
+    <section class="panel output-panel" data-pane="output" aria-label="Output">
+      <div class="panel-header">
+        <h2 class="panel-title">Output</h2>
+        <span class="spacer"></span>
+        <button id="clear" type="button" class="btn ghost small">Clear</button>
+      </div>
+      <div class="output-body">
         <pre id="output" class="output" aria-live="polite"></pre>
-        <div class="stats-row">
-          <div id="stats" class="stats" aria-live="polite"></div>
-          <button id="clear" type="button" class="small">Clear</button>
+        <div class="empty output-empty">
+          <svg class="empty-icon"><use href="#i-play"/></svg>
+          <p><b>Press Run</b> <span class="kbd-hint"></span> to run your program.</p>
+          <p class="muted">Whatever it prints, and any errors, appear here.</p>
         </div>
       </div>
+    </section>
 
-      <div id="bytecode-panel" class="panel" role="tabpanel" aria-labelledby="tab-bytecode" hidden>
-        <p class="hint">The compiled bytecode of every function, from clox's own disassembler. Hover a line of code or an instruction to see which goes with which.</p>
-        <div id="bytecode" class="bytecode"></div>
+    <div id="split-h" class="splitter splitter-h" role="separator" aria-orientation="horizontal"
+         aria-label="Resize the Under the hood panel" tabindex="0"></div>
+
+    <section class="panel hood-panel" data-pane="hood" aria-label="Under the hood">
+      <div class="panel-header tabs" role="tablist">
+        <h2 class="panel-title hood-title">Under the hood</h2>
+        <button role="tab" id="tab-bytecode" aria-controls="bytecode-panel" aria-selected="true">Bytecode</button>
+        <button role="tab" id="tab-debugger" aria-controls="debugger-panel" aria-selected="false">Debugger</button>
+        <span class="spacer"></span>
+        <span class="tab-hint" id="hood-hint">Hover the code or an instruction to link them.</span>
       </div>
 
-      <div id="debugger-panel" class="panel" role="tabpanel" aria-labelledby="tab-debugger" hidden>
-        <div id="dbg-empty" class="dbg-empty">
-          <p><b>Time-travel debugger.</b> Press <b>Debug</b> to run the program while recording every
-          bytecode instruction (up to 20,000). Then step forwards and backwards through the run and
-          watch the stack and call frames change.</p>
+      <div id="bytecode-panel" class="tabpanel" role="tabpanel" aria-labelledby="tab-bytecode">
+        <div id="bytecode" class="bytecode"><div class="empty"><p class="muted">Compiling…</p></div></div>
+      </div>
+
+      <div id="debugger-panel" class="tabpanel" role="tabpanel" aria-labelledby="tab-debugger" hidden>
+        <div id="dbg-empty" class="empty dbg-empty">
+          <svg class="empty-icon"><use href="#i-bug"/></svg>
+          <p><b>Press Debug to step through your program.</b></p>
+          <p class="muted">It runs while recording every bytecode instruction (up to 20,000). Then you can
+            step forwards and backwards and watch values pushed onto the stack and functions called.</p>
+          <button id="dbg-start" type="button" class="btn primary"><svg class="icon"><use href="#i-bug"/></svg><span>Debug this program</span></button>
         </div>
         <div id="dbg" class="dbg" hidden>
           <div id="dbg-banner" class="banner" hidden></div>
           <div class="dbg-controls">
-            <button id="dbg-first" type="button" class="small" title="First step">⏮</button>
-            <button id="dbg-back" type="button" class="small" title="Step back">◀</button>
+            <div class="btn-group">
+              <button id="dbg-first" type="button" class="btn small icon-btn" title="First step" aria-label="First step"><svg class="icon"><use href="#i-first"/></svg></button>
+              <button id="dbg-back" type="button" class="btn small icon-btn" title="Step back (←)" aria-label="Step back"><svg class="icon"><use href="#i-back"/></svg></button>
+              <button id="dbg-play" type="button" class="btn small icon-btn" title="Play" aria-label="Play"><svg class="icon"><use href="#i-play"/></svg></button>
+              <button id="dbg-forward" type="button" class="btn small icon-btn" title="Step forward (→)" aria-label="Step forward"><svg class="icon"><use href="#i-forward"/></svg></button>
+              <button id="dbg-last" type="button" class="btn small icon-btn" title="Last step" aria-label="Last step"><svg class="icon"><use href="#i-last"/></svg></button>
+            </div>
             <input id="dbg-slider" type="range" min="0" max="0" value="0" aria-label="Step">
-            <button id="dbg-forward" type="button" class="small" title="Step forward">▶</button>
-            <button id="dbg-last" type="button" class="small" title="Last step">⏭</button>
+            <div id="dbg-position" class="dbg-position"></div>
           </div>
-          <div id="dbg-position" class="dbg-position"></div>
           <div class="dbg-grid">
-            <div class="dbg-box dbg-code-box">
+            <div class="card dbg-code-card">
               <h3>Next instruction <span id="dbg-fn" class="muted"></span></h3>
               <div id="dbg-code" class="dbg-code"></div>
             </div>
-            <div class="dbg-box">
-              <h3>Value stack <span class="muted">(top last)</span></h3>
-              <ol id="dbg-stack" class="dbg-list"></ol>
+            <div class="card">
+              <h3>Value stack <span class="muted">top ↑</span></h3>
+              <ol id="dbg-stack" class="stack"></ol>
             </div>
-            <div class="dbg-box">
-              <h3>Call frames <span class="muted">(innermost first)</span></h3>
-              <ol id="dbg-frames" class="dbg-list"></ol>
+            <div class="card">
+              <h3>Call frames</h3>
+              <ol id="dbg-frames" class="frames"></ol>
             </div>
-            <div class="dbg-box">
+            <div class="card">
               <h3>Output so far</h3>
               <pre id="dbg-output" class="dbg-output"></pre>
             </div>
@@ -102,6 +175,17 @@
       </div>
     </section>
   </main>
+
+  <footer class="statusbar">
+    <span id="status" class="status" role="status">Loading clox…</span>
+    <div id="stats" class="stats" aria-live="polite"></div>
+    <span class="spacer"></span>
+    <span class="shortcuts" aria-hidden="true">
+      <span><kbd class="kbd-mod">↵</kbd> Run</span>
+      <span><kbd class="kbd-mod kbd-shift">↵</kbd> Debug</span>
+      <span><kbd>Esc</kbd> Stop</span>
+    </span>
+  </footer>
 
   <script src="examples.js"></script>
   <script type="module" src="app.js"></script>

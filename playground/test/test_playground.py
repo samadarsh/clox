@@ -305,7 +305,8 @@ def test_share_and_autosave(browser, url):
 def test_bytecode_tab(page):
     set_code(page, CALL_PROGRAM)
     page.click("#tab-bytecode")
-    page.wait_for_selector("#bytecode .bc-op", timeout=10000)
+    # The tab is always on screen; wait until it shows this program, not the last one.
+    page.wait_for_selector("#bytecode:not(.stale) .bc-op", timeout=10000)
     headings = page.locator("#bytecode h3").all_inner_texts()
     headings = [" ".join(h.split()) for h in headings]
     ok = check(headings == ["<script> (top-level code)", "fun add"], f"headings {headings!r}")

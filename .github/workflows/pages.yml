@@ -39,6 +39,7 @@ jobs:
              playground/lox.js playground/share.js playground/worker.js \
              playground/examples.js playground/clox.js playground/clox.wasm _site/
           cp playground/vendor/codemirror.js _site/vendor/
+          cp -r playground/vendor/fonts _site/vendor/
 
       - uses: actions/configure-pages@v5
 

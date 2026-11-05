@@ -58,7 +58,7 @@ const lineHighlightsPlugin = EditorView.decorations.compute([lineHighlights, "do
 
 const editorTheme = EditorView.theme({
   "&": { height: "100%", color: "var(--text)", backgroundColor: "var(--code-bg)" },
-  ".cm-scroller": { fontFamily: "var(--mono)", fontSize: "13.5px", lineHeight: "1.55" },
+  ".cm-scroller": { fontFamily: "var(--mono)", fontSize: "13px", lineHeight: "1.65" },
   ".cm-content": { caretColor: "var(--text)", padding: "10px 0" },
   "&.cm-focused .cm-cursor": { borderLeftColor: "var(--text)" },
   ".cm-gutters": { backgroundColor: "var(--code-bg)", color: "var(--gutter)", border: "none" },
@@ -68,7 +68,7 @@ const editorTheme = EditorView.theme({
     backgroundColor: "var(--selection) !important",
   },
   ".cm-hover-line": { backgroundColor: "var(--hover-line)" },
-  ".cm-debug-line": { backgroundColor: "var(--debug-line)", boxShadow: "inset 3px 0 var(--accent)" },
+  ".cm-debug-line": { backgroundColor: "var(--debug-line)", boxShadow: "inset 3px 0 var(--teal)" },
   ".cm-tooltip": {
     backgroundColor: "var(--panel)", color: "var(--text)", border: "1px solid var(--border)",
   },
@@ -220,6 +220,8 @@ function startProgram(mode) {
   clearDiagnostics();
   $("stats").textContent = "";
   running = { id: nextId++, mode, source };
+  dismissHint();
+  setPlaying(false);
   if (mode === "debug") {
     debugOutput = [];
     requestBytecode(source);         // the debugger shows the instructions
@@ -297,9 +299,10 @@ function renderQueue() {
   scheduled = false;
   const atBottom = output.scrollTop + output.clientHeight >= output.scrollHeight - 4;
   const fragment = document.createDocumentFragment();
+  const animate = queue.length < 40;
   for (const [stream, text] of queue) {
     const line = document.createElement("div");
-    line.className = stream === "err" ? "line err" : "line";
+    line.className = (stream === "err" ? "line err" : "line") + (animate ? " fresh" : "");
     if (stream === "err") addLineLinks(line, text);
     else line.textContent = text;
     fragment.appendChild(line);
@@ -443,6 +446,8 @@ function requestBytecode(source) {
 function renderBytecode() {
   const box = $("bytecode");
   box.textContent = "";
+  // Dimmed until it matches the code in the editor again (see onSourceChanged).
+  box.classList.toggle("stale", bytecode.source !== getCode());
   if (bytecode.exitCode !== 0) {
     const pre = document.createElement("pre");
     pre.className = "line err";
@@ -500,6 +505,7 @@ let recording = null;   // {steps, functions, full, source, output}
 
 function loadRecording(data, full, source) {
   recording = { ...data, full, source, output: debugOutput };
+  lastRendered = null;   // a new recording: nothing to animate from
   $("dbg-empty").hidden = true;
   $("dbg").hidden = false;
   const banner = $("dbg-banner");
@@ -565,44 +571,15 @@ function renderStep() {
   const tabRow = document.querySelector(`#bytecode .bc-op[data-fn="${step.f}"][data-offset="${step.o}"]`);
   if (tabRow && bytecode.source === recording.source) tabRow.classList.add("current");
 
-  // The value stack, bottom to top, with each frame's first slot marked.
-  const frameStarts = new Map(step.c.map(([f, , base]) => [base, recording.functions[f]]));
-  const stack = $("dbg-stack");
-  stack.textContent = "";
-  if (step.sb > 0) {
-    const li = document.createElement("li");
-    li.className = "muted";
-    li.textContent = `… ${step.sb} lower slots not recorded`;
-    stack.append(li);
-  }
-  step.s.forEach((value, k) => {
-    const slot = step.sb + k;
-    const li = document.createElement("li");
-    if (frameStarts.has(slot)) {
-      li.className = "frame-start";
-      li.dataset.frame = frameStarts.get(slot);
-    }
-    const index = document.createElement("span");
-    index.className = "slot";
-    index.textContent = slot;
-    const text = document.createElement("span");
-    text.className = "value";
-    text.textContent = value;
-    li.append(index, text);
-    stack.append(li);
-  });
-  if (step.s.length === 0) stack.innerHTML = '<li class="muted">empty</li>';
-
-  // Call frames, innermost first.
-  const frames = $("dbg-frames");
-  frames.textContent = "";
-  [...step.c].reverse().forEach(([f, line], k) => {
-    const li = document.createElement("li");
-    if (k === 0) li.className = "active";
-    const name = recording.functions[f];
-    li.textContent = `${name === "<script>" ? "script" : name + "()"}  line ${line}`;
-    frames.append(li);
-  });
+  // Animate only between neighbouring steps; a jump redraws without motion.
+  const prev = lastRendered && lastRendered.source === recording.source &&
+    Math.abs(lastRendered.index - i) === 1 ? lastRendered : null;
+  renderStack(step, prev);
+  renderFrames(step, prev);
+  lastRendered = {
+    index: i, source: recording.source, frameCount: step.c.length,
+    stack: step.s.map((value, k) => ({ slot: step.sb + k, value })),
+  };
 
   $("dbg-output").textContent = recording.output.slice(0, step.p).join("\n");
 
@@ -615,31 +592,166 @@ function renderStep() {
   }
 }
 
+let lastRendered = null;   // the step drawn last, to animate the difference
+
+// The value stack, bottom to top in the DOM (the CSS draws the top first).
+// Compared with the previous step, values that are new slide in ("pushed"),
+// and values that are gone fade out as "ghost" rows that are then removed.
+function renderStack(step, prev) {
+  const frameStarts = new Map(step.c.map(([f, , base]) => [base, recording.functions[f]]));
+  const now = step.s.map((value, k) => ({ slot: step.sb + k, value }));
+  let same = 0;
+  if (prev) {
+    while (same < now.length && same < prev.stack.length &&
+           now[same].slot === prev.stack[same].slot && now[same].value === prev.stack[same].value) {
+      same++;
+    }
+  }
+
+  const stack = $("dbg-stack");
+  stack.textContent = "";
+  const row = ({ slot, value }, valueClass) => {
+    const li = document.createElement("li");
+    if (frameStarts.has(slot)) {
+      li.classList.add("frame-start");
+      const name = frameStarts.get(slot);
+      li.dataset.frame = name === "<script>" ? "script" : `${name}()`;
+    }
+    const index = document.createElement("span");
+    index.className = "slot";
+    index.textContent = slot;
+    const text = document.createElement("span");
+    text.className = valueClass;
+    text.textContent = value;
+    li.append(index, text);
+    return li;
+  };
+  if (step.sb > 0) {
+    const note = document.createElement("li");
+    note.className = "note";
+    note.textContent = `… ${step.sb} lower slots not recorded`;
+    stack.append(note);
+  }
+  now.forEach((item, k) => {
+    const li = row(item, "value");
+    if (prev && k >= same) li.classList.add("pushed");
+    if (k === now.length - 1) li.classList.add("top");
+    stack.append(li);
+  });
+  if (prev) {
+    for (const item of prev.stack.slice(same)) {
+      const ghost = row(item, "ghost-value");   // not ".value": it's gone already
+      ghost.classList.add("ghost");
+      ghost.setAttribute("aria-hidden", "true");
+      stack.append(ghost);
+      setTimeout(() => ghost.remove(), 260);
+    }
+  }
+  if (now.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "note";
+    empty.textContent = "empty";
+    stack.append(empty);
+  }
+}
+
+// Call frames, innermost first, one card each. Entering a function slides
+// its card in.
+function renderFrames(step, prev) {
+  const frames = $("dbg-frames");
+  frames.textContent = "";
+  [...step.c].reverse().forEach(([f, line], k) => {
+    const li = document.createElement("li");
+    li.className = "frame-card" + (k === 0 ? " active" : "");
+    li.dataset.depth = step.c.length - k;
+    if (k === 0 && prev && step.c.length > prev.frameCount) li.classList.add("entered");
+    const name = recording.functions[f];
+    const fn = document.createElement("span");
+    fn.className = "frame-fn";
+    fn.textContent = name === "<script>" ? "script" : `${name}()`;
+    const where = document.createElement("span");
+    where.className = "frame-line";
+    where.textContent = `line ${line}`;
+    li.append(fn, "  ", where);
+    frames.append(li);
+  });
+}
+
 function clearDebugLine() {
   view.dispatch({ effects: setDebugLine.of(null) });
 }
 
-$("dbg-slider").addEventListener("input", renderStep);
-$("dbg-first").addEventListener("click", () => goToStep(0));
-$("dbg-back").addEventListener("click", () => goToStep(currentStep() - 1));
-$("dbg-forward").addEventListener("click", () => goToStep(currentStep() + 1));
-$("dbg-last").addEventListener("click", () => goToStep(Infinity));
+// Play steps through the recording on its own, a few steps a second.
+let playTimer = null;
+function setPlaying(on) {
+  clearInterval(playTimer);
+  playTimer = null;
+  if (on && recording && recording.steps.length > 1) {
+    if (currentStep() >= recording.steps.length - 1) goToStep(0);
+    playTimer = setInterval(() => {
+      if (currentStep() >= recording.steps.length - 1) setPlaying(false);
+      else goToStep(currentStep() + 1);
+    }, 260);
+  }
+  const button = $("dbg-play");
+  button.querySelector("use").setAttribute("href", playTimer ? "#i-pause" : "#i-play");
+  button.title = playTimer ? "Pause" : "Play";
+  button.setAttribute("aria-label", button.title);
+}
+
+const manual = (fn) => () => { setPlaying(false); fn(); };
+$("dbg-slider").addEventListener("input", manual(renderStep));
+$("dbg-first").addEventListener("click", manual(() => goToStep(0)));
+$("dbg-back").addEventListener("click", manual(() => goToStep(currentStep() - 1)));
+$("dbg-forward").addEventListener("click", manual(() => goToStep(currentStep() + 1)));
+$("dbg-last").addEventListener("click", manual(() => goToStep(Infinity)));
+$("dbg-play").addEventListener("click", () => setPlaying(!playTimer));
+$("dbg-start").addEventListener("click", () => debug());
+// ← and → step while the debugger has focus (the slider handles them itself).
+$("debugger-panel").addEventListener("keydown", (event) => {
+  if (event.target.id === "dbg-slider") return;
+  if (event.key === "ArrowLeft") { event.preventDefault(); manual(() => goToStep(currentStep() - 1))(); }
+  if (event.key === "ArrowRight") { event.preventDefault(); manual(() => goToStep(currentStep() + 1))(); }
+});
 
 // =========================================================================
 // Tabs, sharing, autosave, theme, shortcuts
 // =========================================================================
 
-function showTab(name) {
-  for (const tab of ["output", "bytecode", "debugger"]) {
+// "output" is a panel of its own on wide screens; "bytecode" and "debugger"
+// are the tabs of the Under the hood panel. On phones only one panel shows at
+// a time (body[data-pane]), so showing a tab also switches to its panel.
+const HOOD_TABS = ["bytecode", "debugger"];
+
+function showTab(name, { switchPane = true } = {}) {
+  if (name === "output") {
+    if (switchPane) setPane("output");
+    return;
+  }
+  for (const tab of HOOD_TABS) {
     const selected = tab === name;
     $(`tab-${tab}`).setAttribute("aria-selected", String(selected));
     $(`${tab}-panel`).hidden = !selected;
   }
+  $("hood-hint").textContent = name === "bytecode"
+    ? "Hover the code or an instruction to link them."
+    : "Click a control, then use ← → to step.";
+  if (switchPane) setPane("hood");
   if (name === "bytecode") requestBytecode(getCode());
 }
 
-for (const tab of ["output", "bytecode", "debugger"]) {
+function setPane(name) {
+  document.body.dataset.pane = name;
+  for (const button of document.querySelectorAll("[data-pane-tab]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.paneTab === name));
+  }
+}
+
+for (const tab of HOOD_TABS) {
   $(`tab-${tab}`).addEventListener("click", () => showTab(tab));
+}
+for (const button of document.querySelectorAll("[data-pane-tab]")) {
+  button.addEventListener("click", () => setPane(button.dataset.paneTab));
 }
 
 let saveTimer = null;
@@ -658,6 +770,9 @@ function onSourceChanged() {
     loadedFromHash = false;
     history.replaceState(null, "", location.pathname + location.search);
   }
+  // The Bytecode tab shows the old program until the new one is compiled
+  // (scheduleBytecode waits for a pause in typing): dim it meanwhile.
+  $("bytecode").classList.toggle("stale", !bytecode || bytecode.source !== getCode());
   scheduleBytecode();
   if (recording && recording.source !== getCode()) {
     clearDebugLine();
@@ -679,16 +794,21 @@ $("share").addEventListener("click", async () => {
 });
 
 function flashButton(button, text) {
-  const original = button.textContent;
-  button.textContent = text;
-  setTimeout(() => { button.textContent = original; }, 1600);
+  const label = button.querySelector(".label");
+  const original = label.textContent;
+  label.textContent = text;
+  setTimeout(() => { label.textContent = original; }, 1600);
 }
 
 const THEMES = ["auto", "light", "dark"];
 function applyTheme(theme) {
   if (theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
-  $("theme").textContent = `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`;
+  const name = theme[0].toUpperCase() + theme.slice(1);
+  $("theme").querySelector(".theme-label").textContent = name;
+  const title = theme === "auto" ? "Theme: follow the system" : `Theme: ${theme}`;
+  $("theme").title = title;
+  $("theme").setAttribute("aria-label", title);
 }
 $("theme").addEventListener("click", () => {
   const current = storage.get(THEME_KEY) || "auto";
@@ -755,6 +875,88 @@ async function initialSource() {
   return { source: EXAMPLES[0].source, example: EXAMPLES[0].id };
 }
 
+// --- resizable panels -------------------------------------------------------
+
+const LAYOUT_KEY = "clox-playground-layout";
+
+function setupSplitters() {
+  const bench = $("workbench");
+  const layout = (() => { try { return JSON.parse(storage.get(LAYOUT_KEY)) || {}; } catch { return {}; } })();
+  const apply = () => {
+    if (layout.left) bench.style.setProperty("--left", `${layout.left}%`);
+    if (layout.bottom) bench.style.setProperty("--bottom", `${layout.bottom}px`);
+  };
+  apply();
+  const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+  const save = () => storage.set(LAYOUT_KEY, JSON.stringify(layout));
+
+  const resize = {
+    // The editor's share of the width, in percent.
+    v: (x, rect) => { layout.left = clamp(((x - rect.left) / rect.width) * 100, 25, 78); },
+    // The Under the hood panel's height, in pixels.
+    h: (y, rect) => { layout.bottom = clamp(rect.bottom - y - 12, 120, rect.height - 220); },
+  };
+
+  for (const [id, axis] of [["split-v", "v"], ["split-h", "h"]]) {
+    const splitter = $(id);
+    splitter.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      splitter.setPointerCapture(event.pointerId);
+      splitter.classList.add("dragging");
+      document.body.classList.add("resizing", `resizing-${axis}`);
+    });
+    splitter.addEventListener("pointermove", (event) => {
+      if (!splitter.hasPointerCapture(event.pointerId)) return;
+      resize[axis](axis === "v" ? event.clientX : event.clientY, bench.getBoundingClientRect());
+      apply();
+    });
+    const end = () => {
+      splitter.classList.remove("dragging");
+      document.body.classList.remove("resizing", `resizing-${axis}`);
+      save();
+    };
+    splitter.addEventListener("pointerup", end);
+    splitter.addEventListener("pointercancel", end);
+    // Keyboard: arrows move a focused splitter; double-click resets.
+    splitter.addEventListener("keydown", (event) => {
+      const rect = bench.getBoundingClientRect();
+      if (axis === "v" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        const now = layout.left ?? 56;
+        layout.left = clamp(now + (event.key === "ArrowLeft" ? -2 : 2), 25, 78);
+      } else if (axis === "h" && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        const now = layout.bottom ?? 300;
+        layout.bottom = clamp(now + (event.key === "ArrowUp" ? 24 : -24), 120, rect.height - 220);
+      } else {
+        return;
+      }
+      event.preventDefault();
+      apply();
+      save();
+    });
+    splitter.addEventListener("dblclick", () => {
+      delete layout[axis === "v" ? "left" : "bottom"];
+      bench.style.removeProperty(axis === "v" ? "--left" : "--bottom");
+      save();
+    });
+  }
+}
+
+// --- first-visit hint --------------------------------------------------------
+
+const HINT_KEY = "clox-playground-hint-seen";
+
+function showHintOnFirstVisit() {
+  if (!storage.get(HINT_KEY)) $("hint").hidden = false;
+}
+
+function dismissHint() {
+  if ($("hint").hidden) return;
+  $("hint").hidden = true;
+  storage.set(HINT_KEY, "1");
+}
+
+$("hint-close").addEventListener("click", dismissHint);
+
 async function main() {
   applyTheme(storage.get(THEME_KEY) || "auto");
   const start = await initialSource();
@@ -762,8 +964,13 @@ async function main() {
   const example = EXAMPLES.find((e) => e.source === start.source);
   $("examples").value = example ? example.id : "";
   if (start.note) appendLine("out", start.note);
+  const mac = document.documentElement.dataset.platform === "mac";
+  for (const el of document.querySelectorAll(".kbd-hint")) el.textContent = mac ? "(⌘↵)" : "(Ctrl+↵)";
+  setupSplitters();
   startRunner();
   startHelper();
+  showTab("bytecode", { switchPane: false });   // the Bytecode tab is open first
+  showHintOnFirstVisit();
   updateButtons();
   // For the headless test and the browser console.
   window.playground = { getCode, setCode, view, goToStep, currentStep };
