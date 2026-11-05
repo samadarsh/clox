@@ -10,6 +10,11 @@
 #include "memory.h"
 #include "vm.h"
 
+#ifdef CLOX_PLAYGROUND
+// Browser playground build only (`make wasm`): see playground/hooks.h.
+#include "hooks.h"
+#endif
+
 // A single global VM, as in the book. It keeps the code short; a real
 // embeddable VM would pass a VM* around instead.
 VM vm;
@@ -369,6 +374,13 @@ static InterpretResult run(void) {
     printf("\n");
     disassembleInstruction(&frame->closure->function->chunk,
         (int)(ip - frame->closure->function->chunk.code));
+#endif
+
+#ifdef CLOX_PLAYGROUND
+    // Playground build only: count the instruction for the stats bar and,
+    // when the debugger is recording, record this step. The recorder stops
+    // the program once it has recorded its limit.
+    if (!playgroundStep(frame, ip)) return INTERPRET_RUNTIME_ERROR;
 #endif
 
     uint8_t instruction;

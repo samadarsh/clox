@@ -4,6 +4,11 @@
 #include "memory.h"
 #include "vm.h"
 
+#ifdef CLOX_PLAYGROUND
+// Browser playground build only (`make wasm`): see playground/hooks.h.
+#include "hooks.h"
+#endif
+
 #ifdef DEBUG_LOG_GC
 #include <stdio.h>
 #include "debug.h"
@@ -18,6 +23,9 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
   // (size_t is unsigned, so shrinking wraps around, and the next addition
   // wraps back. The total still comes out right.)
   vm.bytesAllocated += newSize - oldSize;
+#ifdef CLOX_PLAYGROUND
+  playgroundNoteHeap();   // peak heap size, for the playground's stats bar
+#endif
 
   // Only collect when asking for MORE memory: freeing can't run out.
   if (newSize > oldSize) {
@@ -264,6 +272,9 @@ static void sweep(void) {
 }
 
 void collectGarbage(void) {
+#ifdef CLOX_PLAYGROUND
+  playgroundNoteCollection();   // for the playground's stats bar
+#endif
 #ifdef DEBUG_LOG_GC
   printf("-- gc begin\n");
   size_t before = vm.bytesAllocated;

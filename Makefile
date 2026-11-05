@@ -167,18 +167,23 @@ bench-compare: $(CLOX)
 #   ALLOW_MEMORY_GROWTH       the heap grows as Lox programs allocate
 #   STACK_SIZE                1 MB of C stack (the compiler recurses on nested
 #                             expressions)
+#   CLOX_PLAYGROUND           switches on the hooks in playground/hooks.h
+#                             (instruction counts, GC stats, the debugger's
+#                             recording). Only this build defines it, and only
+#                             this build has playground/ on the include path.
 EMCC       ?= emcc
 WASM_SRC    = $(filter-out src/main.c,$(SRC)) playground/clox_wasm.c
 WASM_OUT    = playground/clox.js
-WASM_FLAGS  = $(STD) $(WARN) -O2 $(VALUE_FLAGS) -Isrc \
+WASM_FLAGS  = $(STD) $(WARN) -O2 $(VALUE_FLAGS) -DCLOX_PLAYGROUND \
+              -Isrc -Iplayground \
               -sMODULARIZE=1 -sEXPORT_NAME=createClox -sENVIRONMENT=worker \
               -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576 \
-              -sEXPORTED_FUNCTIONS=_clox_run,_malloc,_free \
-              -sEXPORTED_RUNTIME_METHODS=stringToNewUTF8
+              -sEXPORTED_FUNCTIONS=_clox_run,_clox_disassemble,_clox_debug,_clox_recording,_clox_recording_full,_clox_stat_instructions,_clox_stat_collections,_clox_stat_peak_bytes,_malloc,_free \
+              -sEXPORTED_RUNTIME_METHODS=stringToNewUTF8,UTF8ToString
 
 wasm: $(WASM_OUT)
 
-$(WASM_OUT): $(WASM_SRC) $(wildcard src/*.h)
+$(WASM_OUT): $(WASM_SRC) $(wildcard src/*.h) playground/hooks.h
 	$(EMCC) $(WASM_FLAGS) $(WASM_SRC) -o $@
 
 # Serves playground/ on a local port and drives it with headless Chromium.

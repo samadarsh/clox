@@ -4,46 +4,106 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>clox playground</title>
-  <meta name="description" content="Run Lox programs in your browser with clox, a bytecode VM from Crafting Interpreters compiled to WebAssembly.">
+  <meta name="description" content="Run Lox in your browser on clox, a bytecode VM in C compiled to WebAssembly. See the bytecode and step through it with a time-travel debugger.">
+  <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="style.css">
+  <!-- Apply a saved theme before the page draws, so it doesn't flash. -->
+  <script>
+    try {
+      const theme = localStorage.getItem("clox-playground-theme");
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    } catch (e) {}
+  </script>
 </head>
 <body>
-  <header>
-    <h1>clox playground</h1>
-    <p class="tagline">
-      <a href="https://craftinginterpreters.com/the-lox-language.html">Lox</a>
-      running on clox, a bytecode VM in C compiled to WebAssembly.
-      <a href="https://github.com/samadarsh/clox">Source</a>
-    </p>
+  <header class="topbar">
+    <div class="brand">
+      <h1>clox <span>playground</span></h1>
+      <p class="tagline">
+        <a href="https://craftinginterpreters.com/the-lox-language.html">Lox</a> on a bytecode VM
+        written in C, compiled to WebAssembly · <a href="https://github.com/samadarsh/clox">source</a>
+      </p>
+    </div>
+    <div class="top-actions">
+      <button id="share" type="button" title="Copy a link to this program">Share</button>
+      <button id="theme" type="button" title="Theme: follow the system, light or dark">Theme: Auto</button>
+    </div>
   </header>
 
-  <main>
+  <main class="layout">
     <section class="pane editor-pane" aria-label="Program">
       <div class="toolbar">
-        <label for="examples">Example</label>
-        <select id="examples"></select>
+        <select id="examples" aria-label="Example program"></select>
         <span class="spacer"></span>
-        <button id="run" type="button" disabled title="Run (Ctrl+Enter or ⌘+Enter)">Run</button>
-        <button id="stop" type="button" disabled>Stop</button>
+        <button id="run" class="primary" type="button" disabled title="Run (Ctrl+Enter / ⌘+Enter)">Run</button>
+        <button id="debug" type="button" disabled title="Run and record every step, then replay it in the Debugger tab">Debug</button>
+        <button id="stop" type="button" disabled title="Stop (Esc)">Stop</button>
       </div>
-      <div class="editor">
-        <pre id="gutter" class="gutter" aria-hidden="true">1</pre>
-        <textarea id="editor" spellcheck="false" autocapitalize="off"
-                  autocomplete="off" aria-label="Lox source code"></textarea>
-      </div>
+      <div id="editor" class="editor"></div>
     </section>
 
-    <section class="pane output-pane" aria-label="Output">
-      <div class="toolbar">
-        <span id="status" class="status" role="status">Loading clox…</span>
+    <section class="pane side-pane" aria-label="Results">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-output" aria-controls="output-panel" aria-selected="true">Output</button>
+        <button role="tab" id="tab-bytecode" aria-controls="bytecode-panel" aria-selected="false">Bytecode</button>
+        <button role="tab" id="tab-debugger" aria-controls="debugger-panel" aria-selected="false">Debugger</button>
         <span class="spacer"></span>
-        <button id="clear" type="button">Clear</button>
+        <span id="status" class="status" role="status">Loading clox…</span>
       </div>
-      <pre id="output" class="output" aria-live="polite"></pre>
+
+      <div id="output-panel" class="panel" role="tabpanel" aria-labelledby="tab-output">
+        <pre id="output" class="output" aria-live="polite"></pre>
+        <div class="stats-row">
+          <div id="stats" class="stats" aria-live="polite"></div>
+          <button id="clear" type="button" class="small">Clear</button>
+        </div>
+      </div>
+
+      <div id="bytecode-panel" class="panel" role="tabpanel" aria-labelledby="tab-bytecode" hidden>
+        <p class="hint">The compiled bytecode of every function, from clox's own disassembler. Hover a line of code or an instruction to see which goes with which.</p>
+        <div id="bytecode" class="bytecode"></div>
+      </div>
+
+      <div id="debugger-panel" class="panel" role="tabpanel" aria-labelledby="tab-debugger" hidden>
+        <div id="dbg-empty" class="dbg-empty">
+          <p><b>Time-travel debugger.</b> Press <b>Debug</b> to run the program while recording every
+          bytecode instruction (up to 20,000). Then step forwards and backwards through the run and
+          watch the stack and call frames change.</p>
+        </div>
+        <div id="dbg" class="dbg" hidden>
+          <div id="dbg-banner" class="banner" hidden></div>
+          <div class="dbg-controls">
+            <button id="dbg-first" type="button" class="small" title="First step">⏮</button>
+            <button id="dbg-back" type="button" class="small" title="Step back">◀</button>
+            <input id="dbg-slider" type="range" min="0" max="0" value="0" aria-label="Step">
+            <button id="dbg-forward" type="button" class="small" title="Step forward">▶</button>
+            <button id="dbg-last" type="button" class="small" title="Last step">⏭</button>
+          </div>
+          <div id="dbg-position" class="dbg-position"></div>
+          <div class="dbg-grid">
+            <div class="dbg-box dbg-code-box">
+              <h3>Next instruction <span id="dbg-fn" class="muted"></span></h3>
+              <div id="dbg-code" class="dbg-code"></div>
+            </div>
+            <div class="dbg-box">
+              <h3>Value stack <span class="muted">(top last)</span></h3>
+              <ol id="dbg-stack" class="dbg-list"></ol>
+            </div>
+            <div class="dbg-box">
+              <h3>Call frames <span class="muted">(innermost first)</span></h3>
+              <ol id="dbg-frames" class="dbg-list"></ol>
+            </div>
+            <div class="dbg-box">
+              <h3>Output so far</h3>
+              <pre id="dbg-output" class="dbg-output"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
   <script src="examples.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

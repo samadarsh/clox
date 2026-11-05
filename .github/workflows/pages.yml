@@ -30,13 +30,15 @@ jobs:
       - name: Test the playground in headless Chromium
         run: make test-wasm-docker
 
-      # Publish only the files the page needs, not the C entry point or tests.
+      # Publish only the files the page needs, not the C code, tests or the
+      # vendor build setup.
       - name: Collect the site
         run: |
-          mkdir _site
+          mkdir -p _site/vendor
           cp playground/index.html playground/style.css playground/app.js \
-             playground/worker.js playground/examples.js \
-             playground/clox.js playground/clox.wasm _site/
+             playground/lox.js playground/share.js playground/worker.js \
+             playground/examples.js playground/clox.js playground/clox.wasm _site/
+          cp playground/vendor/codemirror.js _site/vendor/
 
       - uses: actions/configure-pages@v5
 

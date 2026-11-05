@@ -91,7 +91,12 @@ Exit codes follow the book: `65` compile error, `70` runtime error, `74` file ca
 
 ## Playground
 
-**[samadarsh.github.io/clox](https://samadarsh.github.io/clox/)** runs clox in the browser, with example programs (closures, classes, FizzBuzz, an infinite loop to stop). The interpreter is the same C code compiled to WebAssembly (67 KB). It runs in a Web Worker, so an endless loop never freezes the page: Stop throws the worker away and starts a new one. Every Run gets a fresh VM, and errors link to the line they're on.
+**[samadarsh.github.io/clox](https://samadarsh.github.io/clox/)** runs clox in the browser: the same C code compiled to WebAssembly (74 KB), in a Web Worker so an endless loop never freezes the page. Besides a CodeMirror editor with errors shown inline, shareable links and run statistics, it shows what's under the hood:
+
+- a **Bytecode tab** with the disassembly of every function, linked to the source as you hover;
+- a **time-travel debugger** that records a run and lets you step forwards and backwards through every instruction, watching the value stack and call frames.
+
+The playground's hooks into the VM sit behind a compile flag only the WebAssembly build sets, so the normal clox is unchanged.
 
 ```bash
 make wasm-docker                           # or `make wasm` with Emscripten installed
