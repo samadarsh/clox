@@ -319,21 +319,37 @@ static InterpretResult run(void) {
   // The frame of the function currently running. It changes on every call
   // and return, so those instructions reload it.
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
+  // The instruction pointer, kept in a local variable instead of always going
+  // through frame->ip (chapter 24's first challenge). frame points into the
+  // global vm.frames, which any function run() calls might change, so the C
+  // compiler has to load and store frame->ip in memory around every byte. A
+  // local whose address is never taken can stay in a CPU register.
+  //
+  // The cost: frame->ip is now out of date while the frame runs. Two kinds of
+  // code read it, so ip must be written back first:
+  //   - a call (callValue, invoke, invokeFromClass): the caller's frame->ip
+  //     is where execution resumes when the callee returns. After the call,
+  //     reload frame and ip, because a new frame may be running now.
+  //   - runtimeError(): it turns frame->ip into the line number of the
+  //     stack trace.
+  // The garbage collector never reads ip (code isn't moved or freed while a
+  // frame running it is reachable), so allocation needs nothing.
+  register uint8_t* ip = frame->ip;
 
-#define READ_BYTE() (*frame->ip++)
+#define READ_BYTE() (*ip++)
 #define READ_CONSTANT() \
     (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 // Read a 16-bit operand: two bytes, high byte first. ip moves past both.
 #define READ_SHORT() \
-    (frame->ip += 2, \
-    (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
+    (ip += 2, (uint16_t)((ip[-2] << 8) | ip[-1]))
 // Check both operands are numbers, then pop b first: the right operand was
 // pushed last, so it is on top. valueType wraps the result (NUMBER_VAL for
 // arithmetic, BOOL_VAL for comparisons).
 #define BINARY_OP(valueType, op) \
     do { \
       if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
+        frame->ip = ip; \
         runtimeError("Operands must be numbers."); \
         return INTERPRET_RUNTIME_ERROR; \
       } \
@@ -352,7 +368,7 @@ static InterpretResult run(void) {
     }
     printf("\n");
     disassembleInstruction(&frame->closure->function->chunk,
-        (int)(frame->ip - frame->closure->function->chunk.code));
+        (int)(ip - frame->closure->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -383,6 +399,7 @@ static InterpretResult run(void) {
         ObjString* name = READ_STRING();
         Value value;
         if (!tableGet(&vm.globals, name, &value)) {
+          frame->ip = ip;
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -404,6 +421,7 @@ static InterpretResult run(void) {
           // tableSet returned "new key": the variable was never declared.
           // Undo the accidental definition, then report the error.
           tableDelete(&vm.globals, name);
+          frame->ip = ip;
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -423,6 +441,7 @@ static InterpretResult run(void) {
       }
       case OP_GET_PROPERTY: {
         if (!IS_INSTANCE(peek(0))) {
+          frame->ip = ip;
           runtimeError("Only instances have properties.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -439,6 +458,7 @@ static InterpretResult run(void) {
         }
 
         // Not a field, so it must be a method: make a bound method.
+        frame->ip = ip;  // bindMethod can report an error
         if (!bindMethod(instance->klass, name)) {
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -448,6 +468,7 @@ static InterpretResult run(void) {
         // Stack: [instance][value]. Setting a field that doesn't exist yet
         // simply creates it.
         if (!IS_INSTANCE(peek(1))) {
+          frame->ip = ip;
           runtimeError("Only instances have fields.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -466,6 +487,7 @@ static InterpretResult run(void) {
         ObjString* name = READ_STRING();
         ObjClass* superclass = AS_CLASS(pop());
 
+        frame->ip = ip;  // bindMethod can report an error
         if (!bindMethod(superclass, name)) {
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -487,6 +509,7 @@ static InterpretResult run(void) {
           double a = AS_NUMBER(pop());
           push(NUMBER_VAL(a + b));
         } else {
+          frame->ip = ip;
           runtimeError(
               "Operands must be two numbers or two strings.");
           return INTERPRET_RUNTIME_ERROR;
@@ -501,6 +524,7 @@ static InterpretResult run(void) {
         break;
       case OP_NEGATE:
         if (!IS_NUMBER(peek(0))) {
+          frame->ip = ip;
           runtimeError("Operand must be a number.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -515,23 +539,25 @@ static InterpretResult run(void) {
         // A jump just moves the instruction pointer. The offset counts from
         // the byte after the operand, because READ_SHORT already moved past it.
         uint16_t offset = READ_SHORT();
-        frame->ip += offset;
+        ip += offset;
         break;
       }
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
         // Peek, don't pop: the condition stays on the stack. `and`/`or` need
         // it as their result; statements emit their own OP_POP.
-        if (isFalsey(peek(0))) frame->ip += offset;
+        if (isFalsey(peek(0))) ip += offset;
         break;
       }
       case OP_LOOP: {
         uint16_t offset = READ_SHORT();
-        frame->ip -= offset;
+        ip -= offset;
         break;
       }
       case OP_CALL: {
         int argCount = READ_BYTE();
+        // Where the caller resumes after the call returns.
+        frame->ip = ip;
         // The callee sits just below its arguments.
         if (!callValue(peek(argCount), argCount)) {
           return INTERPRET_RUNTIME_ERROR;
@@ -540,15 +566,18 @@ static InterpretResult run(void) {
         // to it. The caller's frame keeps its ip, pointing just after this
         // OP_CALL: that's where execution resumes on return.
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         break;
       }
       case OP_INVOKE: {
         ObjString* method = READ_STRING();
         int argCount = READ_BYTE();
+        frame->ip = ip;
         if (!invoke(method, argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         break;
       }
       case OP_SUPER_INVOKE: {
@@ -558,10 +587,12 @@ static InterpretResult run(void) {
         ObjString* method = READ_STRING();
         int argCount = READ_BYTE();
         ObjClass* superclass = AS_CLASS(pop());
+        frame->ip = ip;
         if (!invokeFromClass(superclass, method, argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         break;
       }
       case OP_CLOSURE: {
@@ -603,7 +634,9 @@ static InterpretResult run(void) {
         // leave the result where the callee was.
         vm.stackTop = frame->slots;
         push(result);
+        // Back in the caller: its ip was saved when it made the call.
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         break;
       }
       case OP_CLASS:
@@ -616,6 +649,7 @@ static InterpretResult run(void) {
         // with the same name, which is what overriding means.
         Value superclass = peek(1);
         if (!IS_CLASS(superclass)) {
+          frame->ip = ip;
           runtimeError("Superclass must be a class.");
           return INTERPRET_RUNTIME_ERROR;
         }
