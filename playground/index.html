@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>clox playground</title>
+  <meta name="description" content="Run Lox programs in your browser with clox, a bytecode VM from Crafting Interpreters compiled to WebAssembly.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>clox playground</h1>
+    <p class="tagline">
+      <a href="https://craftinginterpreters.com/the-lox-language.html">Lox</a>
+      running on clox, a bytecode VM in C compiled to WebAssembly.
+      <a href="https://github.com/samadarsh/clox">Source</a>
+    </p>
+  </header>
+
+  <main>
+    <section class="pane editor-pane" aria-label="Program">
+      <div class="toolbar">
+        <label for="examples">Example</label>
+        <select id="examples"></select>
+        <span class="spacer"></span>
+        <button id="run" type="button" disabled title="Run (Ctrl+Enter or ⌘+Enter)">Run</button>
+        <button id="stop" type="button" disabled>Stop</button>
+      </div>
+      <div class="editor">
+        <pre id="gutter" class="gutter" aria-hidden="true">1</pre>
+        <textarea id="editor" spellcheck="false" autocapitalize="off"
+                  autocomplete="off" aria-label="Lox source code"></textarea>
+      </div>
+    </section>
+
+    <section class="pane output-pane" aria-label="Output">
+      <div class="toolbar">
+        <span id="status" class="status" role="status">Loading clox…</span>
+        <span class="spacer"></span>
+        <button id="clear" type="button">Clear</button>
+      </div>
+      <pre id="output" class="output" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <script src="examples.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

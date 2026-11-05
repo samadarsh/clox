@@ -55,6 +55,8 @@ tests/run_tests.py  runner for "// expect: ..." style tests (same rules as test.
 compile_flags.txt   tells the editor's clangd where the headers are
 tools/upstream_tests.py  lists the official tests a chapter should pass
 bench/              upstream benchmarks (lox/), Python ports (python/), run.py
+playground/         browser playground (static page + Web Worker); clox_wasm.c
+                    replaces main.c for the WebAssembly build
 ```
 
 To find which official tests a chapter should pass, clone upstream and run
@@ -72,6 +74,9 @@ make test        all tests, release build
 make test-asan   all tests, sanitized build
 make test-stress all tests, GC before every allocation, under ASan
 make gclog / make gclog-stress   builds that log GC activity
+make wasm        WebAssembly build for the playground (needs emcc) -> playground/clox.{js,wasm}
+make test-wasm   headless Chromium test of the playground (needs Playwright)
+make wasm-docker / make test-wasm-docker   the same two in pinned Docker images (CI uses these)
 make bench       time bench/lox/*.lox (best of 5)
 make bench-compare  clox vs Python 3 on bench/python/*.py
 NAN_BOXING=0     add to any target for the tagged-union Value (default 1:

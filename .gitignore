@@ -1,5 +1,7 @@
 # Build output
 build/
+playground/clox.js
+playground/clox.wasm
 *.o
 *.d
 *.dSYM/

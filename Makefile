@@ -10,6 +10,12 @@
 #   make test         run all tests against the release build
 #   make test-asan    run all tests against the sanitized debug build
 #   make test-stress  run all tests with GC on every allocation, under ASan
+#   make wasm         WebAssembly build for the browser playground (needs emcc)
+#                       -> playground/clox.js + playground/clox.wasm
+#   make test-wasm    run the playground in headless Chromium (needs Playwright)
+#   make wasm-docker / make test-wasm-docker
+#                     the same two, inside pinned Docker images (what CI runs),
+#                     so neither emcc nor Playwright has to be installed
 #   make bench        time the book's benchmarks (bench/lox) with the release build
 #   make bench-compare  the same programs in clox and Python 3 (bench/python)
 #   make clean        delete build/
@@ -52,7 +58,8 @@ endif
 # NaN boxing on (1, the default, as in the book) or off (0).
 NAN_BOXING ?= 1
 ifeq ($(NAN_BOXING),1)
-  FLAGS += -DNAN_BOXING
+  VALUE_FLAGS = -DNAN_BOXING
+  FLAGS += $(VALUE_FLAGS)
   OUT    = build/$(MODE)
 else ifeq ($(NAN_BOXING),0)
   OUT    = build/$(MODE)-union
@@ -71,7 +78,8 @@ UNIT_SRC = $(wildcard tests/unit/*.c)
 UNIT_BIN = $(UNIT_SRC:tests/unit/%.c=$(OUT)/tests/%)
 
 .PHONY: all build debug trace stress gclog gclog-stress test test-asan test-stress \
-        test-unit test-cli test-lox bench bench-compare clean
+        test-unit test-cli test-lox bench bench-compare wasm test-wasm \
+        wasm-docker test-wasm-docker clean
 
 all: build
 
@@ -149,5 +157,50 @@ PYTHON ?= python3
 bench-compare: $(CLOX)
 	@python3 bench/run.py --python $(PYTHON) $(CLOX)
 
+# --- WebAssembly playground ---------------------------------------------------
+
+# The interpreter sources without main.c, plus playground/clox_wasm.c as the
+# entry point. Built with Emscripten's emcc, which compiles C to WebAssembly.
+#   MODULARIZE + EXPORT_NAME  clox.js defines createClox(), which makes a new
+#                             instance (fresh memory, fresh VM) on each call
+#   ENVIRONMENT=worker        it only ever runs inside a Web Worker
+#   ALLOW_MEMORY_GROWTH       the heap grows as Lox programs allocate
+#   STACK_SIZE                1 MB of C stack (the compiler recurses on nested
+#                             expressions)
+EMCC       ?= emcc
+WASM_SRC    = $(filter-out src/main.c,$(SRC)) playground/clox_wasm.c
+WASM_OUT    = playground/clox.js
+WASM_FLAGS  = $(STD) $(WARN) -O2 $(VALUE_FLAGS) -Isrc \
+              -sMODULARIZE=1 -sEXPORT_NAME=createClox -sENVIRONMENT=worker \
+              -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576 \
+              -sEXPORTED_FUNCTIONS=_clox_run,_malloc,_free \
+              -sEXPORTED_RUNTIME_METHODS=stringToNewUTF8
+
+wasm: $(WASM_OUT)
+
+$(WASM_OUT): $(WASM_SRC) $(wildcard src/*.h)
+	$(EMCC) $(WASM_FLAGS) $(WASM_SRC) -o $@
+
+# Serves playground/ on a local port and drives it with headless Chromium.
+test-wasm: $(WASM_OUT)
+	@echo "--- playground (headless Chromium)"
+	@python3 playground/test/test_playground.py
+
+# Pinned tool versions for the Docker targets (and so for CI).
+EMSDK_IMAGE        = emscripten/emsdk:6.0.13
+PLAYWRIGHT_VERSION = 1.64.1
+PLAYWRIGHT_IMAGE   = mcr.microsoft.com/playwright/python:v$(PLAYWRIGHT_VERSION)-noble
+
+wasm-docker:
+	docker run --rm -v "$(CURDIR)":/src -w /src $(EMSDK_IMAGE) make wasm
+
+# The image has the browsers; the Python package is installed at the same
+# version, so the two match.
+test-wasm-docker:
+	@test -f playground/clox.wasm || { echo "run make wasm (or make wasm-docker) first"; exit 1; }
+	docker run --rm -v "$(CURDIR)":/src -w /src $(PLAYWRIGHT_IMAGE) bash -c \
+	  "pip install -q --break-system-packages playwright==$(PLAYWRIGHT_VERSION) && \
+	   python3 playground/test/test_playground.py"
+
 clean:
-	rm -rf build
+	rm -rf build playground/clox.js playground/clox.wasm

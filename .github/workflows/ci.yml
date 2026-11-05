@@ -56,3 +56,18 @@ jobs:
 
       - name: Test (GC on every allocation, under ASan)
         run: make test-stress
+
+  # The browser playground: build clox with Emscripten, then run the page in
+  # headless Chromium (examples through the Web Worker, errors, Stop). Both
+  # tools come from pinned Docker images, see the Makefile.
+  wasm:
+    name: playground (wasm + headless Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build clox for WebAssembly
+        run: make wasm-docker
+
+      - name: Test the playground in headless Chromium
+        run: make test-wasm-docker
