@@ -161,9 +161,11 @@ src/
   compiler.c   tokens -> bytecode (single-pass Pratt parser)
   vm.c         runs bytecode on a value stack, one CallFrame per active call
   chunk.c      a bytecode array + line numbers + constants
-  value.c      Lox values: a tagged union of bool, nil, number, object
+  value.c      Lox values: NaN-boxed 64-bit words, or a tagged union of bool,
+               nil, number, object (NAN_BOXING=0)
   object.c     heap objects: strings (interned), functions, closures, upvalues,
-               natives, all linked into vm.objects
+               natives, classes, instances, bound methods, all linked into
+               vm.objects
   table.c      hash table: global variables and the string intern set
   memory.c     reallocate() and the mark-sweep garbage collector
   debug.c      the disassembler
@@ -172,6 +174,30 @@ tests/         see the table above
 bench/         the book's benchmarks (lox/), Python versions (python/), run.py
 tools/         upstream_tests.py: which official tests a chapter should pass
 ```
+
+## Differences from the book
+
+clox follows the book's code closely, so any chapter can be checked against
+the text. The differences:
+
+**Behaviour: constant reuse for names (our first deliberate deviation).** The
+book's `identifierConstant()` adds a variable's name to the chunk's constant
+table on every use, so a function that mentions globals a few hundred times
+fails with "Too many constants in one chunk.", even with only a few distinct
+names. clox reuses the existing constant (`compiler.c`), as the book's
+chapter 21 challenge suggests. Programs the book's clox rejects for this
+reason now compile, such as upstream's `benchmark/string_equality.lox`.
+Everything the book's clox accepts behaves the same, and the 256-constant
+limit still applies to distinct names and to all other constants (upstream's
+`limit/no_reuse_constants.lox` checks that numbers are not reused).
+
+**Code only, same behaviour:**
+- `run()` keeps the instruction pointer in a local register variable
+  (chapter 24 challenge) instead of using `frame->ip` directly.
+- Debug switches and `NAN_BOXING` are set by the Makefile with `-D`, not by
+  editing `common.h`, and both Value representations are built and tested.
+- `(void)param;` casts and `(void)` parameter lists, so that
+  `-Wall -Wextra -Werror` passes.
 
 ## License
 

@@ -321,9 +321,31 @@ static void parsePrecedence(Precedence precedence);
 
 // Global variables are looked up by name at runtime, so the name goes in the
 // constant table as a string. Returns its index.
+//
+// DEVIATION FROM THE BOOK (the first deliberate one; chapter 21, challenge 1).
+// The book adds a new constant for every use of a name, so a function that
+// mentions globals a few hundred times hits the 256-constant limit ("Too many
+// constants in one chunk."), e.g. upstream's benchmark/string_equality.lox.
+// Here, if this chunk already has the name as a constant, that index is
+// reused. Strings are interned, so "already has the name" is a pointer
+// comparison. Only names are reused: upstream's test
+// limit/no_reuse_constants.lox requires that number constants are not.
 static uint8_t identifierConstant(Token* name) {
-  return makeConstant(OBJ_VAL(copyString(name->start,
-                                         name->length)));
+  ObjString* string = copyString(name->start, name->length);
+
+  // Linear search: a chunk can only address 256 constants, so this looks at
+  // 256 values at most. Nothing here allocates, so `string` (not yet
+  // reachable from anywhere) can't be freed by the GC before makeConstant
+  // pushes it on the stack.
+  ValueArray* constants = &currentChunk()->constants;
+  for (int i = 0; i < constants->count && i <= UINT8_MAX; i++) {
+    if (IS_OBJ(constants->values[i]) &&
+        AS_OBJ(constants->values[i]) == (Obj*)string) {
+      return (uint8_t)i;
+    }
+  }
+
+  return makeConstant(OBJ_VAL(string));
 }
 
 static bool identifiersEqual(Token* a, Token* b) {

@@ -90,20 +90,21 @@ def compare_builds(binaries, runs):
     print("-" * len(header))
     for name in names:
         path = os.path.join(LOX_DIR, name + ".lox")
-        results = []
-        try:
-            for binary in binaries:
+        results = []   # (value, lines), or None where a build can't compile it
+        for binary in binaries:
+            try:
                 results.append(measure([binary, path], name, runs))
-        except Failed as failure:
-            print(f"{name:24}{str(failure):>24}", flush=True)
-            continue
+            except Failed:
+                results.append(None)
+        ran = [r for r in results if r is not None]
         # zoo_batch's printed sum depends on how many batches fit in 10 s.
         if name not in THROUGHPUT:
-            answers = [answer(lines) for _, lines in results]
+            answers = [answer(lines) for _, lines in ran]
             if any(a != answers[0] for a in answers):
                 sys.exit(f"{name}: builds disagree: {answers}")
-        row = f"{name:24}" + "".join(f"{fmt(name, v):>24}" for v, _ in results)
-        if len(binaries) >= 2:
+        row = f"{name:24}" + "".join(
+            f"{'compile error' if r is None else fmt(name, r[0]):>24}" for r in results)
+        if len(binaries) >= 2 and results[0] and results[-1]:
             a, b = results[0][0], results[-1][0]
             ratio = b / a if name in THROUGHPUT else a / b
             row += f"{ratio:11.2f}x"

@@ -9,7 +9,7 @@ explanation.
 | `expressions/` | precedence and associativity beyond the official `precedence.lox`, grouping, comments between tokens |
 | `types/` | falsiness (`0` and `""` are truthy), `==`/`!=` across different types, NaN/infinity/-0 staying numbers in both Value representations |
 | `strings/` | concatenation, equality by content, interning of strings built at runtime |
-| `variables/` | shadowing (the milestone 4 walkthrough), locals vs globals, chained assignment |
+| `variables/` | shadowing (the milestone 4 walkthrough), locals vs globals, chained assignment, hundreds of uses of a few globals in one chunk (needs constant reuse, our deviation from the book), the limit still applying to 257 distinct names |
 | `runtime_error/` | type errors upstream lacks (`1 + "a"`, `"a" < "b"`), error line numbers, execution stopping at the error |
 | `compile_error/` | missing `)`/`;`/`}`, "Expect expression.", panic mode, recovery at the next statement, invalid assignment target |
 | `control_flow/` | nested `if`/`else`, short-circuit `and`/`or` (the right side must not run), every `for` clause missing, zero-iteration loops, stack balance over 1000 iterations, jumps over more than 255 bytes |

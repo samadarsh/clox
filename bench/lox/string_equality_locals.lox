@@ -1,12 +1,14 @@
 // Upstream's benchmark/string_equality.lox, wrapped in a block. Nothing else
 // is changed.
 //
-// The original doesn't compile in clox, the book's included: every use of a
+// The original doesn't compile in the book's clox: every use of a
 // global variable adds its name to the chunk's constants again (the book's
 // identifierConstant() never reuses one), and its hundreds of uses go past the
 // 256-constant limit ("Too many constants in one chunk."). Inside a block the
 // variables are locals, read by stack slot, so they need no constants at all.
-// The loops still do the same string comparisons.
+// The loops still do the same string comparisons. (clox now reuses name
+// constants, so the original compiles too; this version is kept because the
+// Python port, bench/python/string_equality_locals.py, follows it.)
 {
   var a1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1";
   var a2 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2";

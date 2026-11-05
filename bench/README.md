@@ -15,11 +15,14 @@ every build (and each Python port) prints the same results.
 | `lox/` | upstream's `test/benchmark/*.lox`, unchanged, plus `string_equality_locals.lox` (below) |
 | `python/` | Python 3 versions of `fib`, `method_call`, `string_equality_locals`, `instantiation` and `equality`, line for line |
 
-`lox/string_equality.lox` doesn't compile in clox, the book's own version
-included: every use of a global adds the name to the chunk's constants again,
-and its hundreds of uses go past the 256-constant limit ("Too many constants in
-one chunk."). `string_equality_locals.lox` is the same program inside a block,
-so the variables are locals and need no constants.
+`lox/string_equality.lox` doesn't compile in the book's clox: every use of a
+global adds the name to the chunk's constants again, and its hundreds of uses
+go past the 256-constant limit ("Too many constants in one chunk."). Since our
+first deviation from the book (names reuse their constant, see the main
+README) it compiles and runs here; the tables below were measured before that
+and show it as a compile error. `string_equality_locals.lox` is the same
+program inside a block, so the variables are locals: it compiled all along,
+and it is the version the Python port follows.
 
 ## Chapter 30: before and after
 
@@ -77,6 +80,23 @@ do the least work per instruction) because loading and storing `frame->ip` was
 cheap on this CPU: the store and the next load hit the same address, which the
 processor forwards without going to memory. What dispatch still costs is the
 `switch`'s single indirect jump, shared by every opcode and hard to predict.
+
+## Constant reuse for names (deviation from the book)
+
+No effect on running speed: only constant indices change, not instructions
+(`binary_trees`, `equality`, `fib`, `string_equality_locals`, `zoo`: 0.98x to
+1.00x). `string_equality.lox` now runs: 1.030 s with globals, against 0.674 s
+for the locals version, since every global read is a hash lookup.
+
+Compile time, for 120 functions with 250 identifier uses each (30,000 uses),
+startup subtracted, best of 30:
+
+| Program | before | after |
+|---|---|---|
+| 8 names, each used about 31 times per function | 1.18 ms | 1.24 ms |
+| 250 different names per function (worst case: every search fails) | 1.24 ms | 2.76 ms |
+
+The worst case adds about 50 ns per use: a scan of up to 250 constants.
 
 ## clox vs Python 3.14
 

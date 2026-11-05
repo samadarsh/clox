@@ -12,7 +12,10 @@ tests from day one, CI, a Makefile and a clear README.
    structure, so any chapter can be checked against the text. Deviate only
    when the toolchain requires it (for example `(void)param;` casts so that
    `-Wextra -Werror` passes), and mark every deviation with a comment
-   explaining why.
+   explaining why. Deliberate changes to behaviour need the user's approval
+   and are listed in README.md ("Differences from the book"). So far there is
+   one: `identifierConstant()` reuses an existing name constant (chapter 21
+   challenge), so many uses of a global no longer hit the 256-constant limit.
 2. **Every milestone adds the matching official tests.** Copy the files from
    [munificent/craftinginterpreters/test](https://github.com/munificent/craftinginterpreters/tree/master/test)
    into `tests/lox/` with the same sub-paths, but only once clox passes them.
