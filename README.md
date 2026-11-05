@@ -228,13 +228,12 @@ clox follows the book's code closely, so any chapter can be checked against the 
 
 ## What I learned
 
-<!-- TODO(samadarsh): rewrite these in your own words. -->
-
-- _Placeholder: what surprised you about how little a bytecode VM needs, e.g. a stack, a loop and a `switch`._
-- _Placeholder: what writing a garbage collector taught you about C memory ownership, and why a forgotten root is a use-after-free._
-- _Placeholder: something about testing, e.g. stress-GC mode, or breaking the code on purpose to check that the tests notice._
-- _Placeholder: what profiling showed, e.g. NaN boxing being a trade-off, or dispatch costing more than expected._
-- _Placeholder: what you'd do next, or what you'd do differently in a second interpreter._
+- **A programming language is less magic than I thought.** I used to think Python "just runs" my code. Building clox showed me it's a loop that reads one byte at a time and does what it says. Typing `1 + 2 * 3` into my own REPL and seeing it become five bytecode instructions is when it clicked.
+- **Getting `1 + 2 * 3` right is a real problem.** The computer doesn't just know that `*` comes before `+`, or that `10 - 3 + 2` goes left to right. The parser has to decide it, and Pratt parsing turned out to be a surprisingly simple way to do that.
+- **Passing tests doesn't mean the code is correct.** When I deliberately removed one root from the garbage collector, every normal test still passed, but all 236 failed in stress mode, which runs the GC on every allocation. Some bugs only show up at the worst possible moment, so you have to build tests that force that moment.
+- **Memory in C is a responsibility, not a detail.** Strings had to live on the heap, every object had to be tracked so it could be freed, and a leak check in a Linux container caught a mistake my Mac couldn't see. Garbage collectors in Python and Java make a lot more sense to me now.
+- **Measure before you believe a benchmark.** My first comparison said Python was faster, but part of that was CPython deleting code that did nothing. And an optimization I expected to help a lot gave only 6%, because the CPU was already hiding the cost. Finding out *why* taught me more than the numbers did.
+- **I understand the languages I use every day.** Closures, `this`, inheritance and garbage collection used to be words I knew how to use. Now I know how they work inside, because I built each of them.
 
 ## Roadmap
 
