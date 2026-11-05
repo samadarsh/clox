@@ -1,0 +1,9 @@
+fun area(width, height) {
+  return width * height;
+}
+
+fun describe(shape) {
+  return "area: " + area(shape, "tall");
+}
+
+print describe(3);

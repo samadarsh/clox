@@ -1,0 +1,19 @@
+class Animal {
+  init(name) { this.name = name; }
+  speak() { return this.name + " makes a sound"; }
+}
+
+class Dog < Animal {
+  speak() { return super.speak() + ": woof!"; }
+}
+
+fun counter() {
+  var count = 0;
+  fun next() { count = count + 1; return count; }
+  return next;
+}
+
+var tick = counter();
+print Dog("Rex").speak();
+print tick();
+print tick();
