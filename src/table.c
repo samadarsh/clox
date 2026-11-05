@@ -28,7 +28,10 @@ void freeTable(Table* table) {
 // string is interned (see object.c): equal strings are the same object.
 static Entry* findEntry(Entry* entries, int capacity,
                         ObjString* key) {
-  uint32_t index = key->hash % capacity;
+  // capacity is always a power of two (GROW_CAPACITY doubles from 8), so
+  // `hash & (capacity - 1)` keeps the low bits of the hash and gives the
+  // same bucket as `hash % capacity`, without a slow division (chapter 30).
+  uint32_t index = key->hash & (capacity - 1);
   Entry* tombstone = NULL;
 
   for (;;) {
@@ -48,7 +51,7 @@ static Entry* findEntry(Entry* entries, int capacity,
     }
 
     // Linear probing: try the next bucket, wrapping around at the end.
-    index = (index + 1) % capacity;
+    index = (index + 1) & (capacity - 1);
   }
 }
 
@@ -159,7 +162,7 @@ ObjString* tableFindString(Table* table, const char* chars,
                            int length, uint32_t hash) {
   if (table->count == 0) return NULL;
 
-  uint32_t index = hash % table->capacity;
+  uint32_t index = hash & (table->capacity - 1);
   for (;;) {
     Entry* entry = &table->entries[index];
     if (entry->key == NULL) {
@@ -172,6 +175,6 @@ ObjString* tableFindString(Table* table, const char* chars,
       return entry->key;
     }
 
-    index = (index + 1) % table->capacity;
+    index = (index + 1) & (table->capacity - 1);
   }
 }

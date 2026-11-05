@@ -10,9 +10,16 @@
 #   make test         run all tests against the release build
 #   make test-asan    run all tests against the sanitized debug build
 #   make test-stress  run all tests with GC on every allocation, under ASan
+#   make bench        time the book's benchmarks (bench/lox) with the release build
+#   make bench-compare  the same programs in clox and Python 3 (bench/python)
 #   make clean        delete build/
 #
-# CI runs test, test-asan and test-stress.
+# Values are NaN-boxed by default (chapter 30). Add NAN_BOXING=0 to any target
+# to use the tagged-union representation instead, e.g. `make test-asan
+# NAN_BOXING=0`. Those builds go in build/<mode>-union/, so the two
+# representations never share object files.
+#
+# CI runs test, test-asan and test-stress, with NAN_BOXING=1 and NAN_BOXING=0.
 #
 # Works with the GNU Make 3.81 that ships with macOS.
 
@@ -42,8 +49,18 @@ else
   $(error Unknown MODE '$(MODE)': use release, debug, trace, stress, gclog or gclog-stress)
 endif
 
+# NaN boxing on (1, the default, as in the book) or off (0).
+NAN_BOXING ?= 1
+ifeq ($(NAN_BOXING),1)
+  FLAGS += -DNAN_BOXING
+  OUT    = build/$(MODE)
+else ifeq ($(NAN_BOXING),0)
+  OUT    = build/$(MODE)-union
+else
+  $(error NAN_BOXING must be 1 or 0, not '$(NAN_BOXING)')
+endif
+
 CFLAGS = $(STD) $(WARN) $(FLAGS)
-OUT    = build/$(MODE)
 
 SRC      = $(wildcard src/*.c)
 OBJ      = $(SRC:src/%.c=$(OUT)/%.o)
@@ -54,7 +71,7 @@ UNIT_SRC = $(wildcard tests/unit/*.c)
 UNIT_BIN = $(UNIT_SRC:tests/unit/%.c=$(OUT)/tests/%)
 
 .PHONY: all build debug trace stress gclog gclog-stress test test-asan test-stress \
-        test-unit test-cli test-lox clean
+        test-unit test-cli test-lox bench bench-compare clean
 
 all: build
 
@@ -120,6 +137,17 @@ test-cli: $(CLOX)
 test-lox: $(CLOX)
 	@echo "--- lox tests (official + custom)"
 	@python3 tests/run_tests.py $(CLOX) tests/lox tests/custom
+
+# --- benchmarks -------------------------------------------------------------
+
+# Best of 5 runs each. Run on a quiet machine: other work slows the timings.
+bench: $(CLOX)
+	@python3 bench/run.py $(CLOX)
+
+PYTHON ?= python3
+
+bench-compare: $(CLOX)
+	@python3 bench/run.py --python $(PYTHON) $(CLOX)
 
 clean:
 	rm -rf build

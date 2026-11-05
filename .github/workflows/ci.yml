@@ -10,14 +10,25 @@ on:
 
 jobs:
   test:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.os }} (${{ matrix.values }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        # Both Value representations from chapter 30 must keep working:
+        # NaN boxing (the default) and the tagged union.
+        values: [nan-boxing, tagged-union]
+        include:
+          - values: nan-boxing
+            nan_boxing: 1
+          - values: tagged-union
+            nan_boxing: 0
 
     env:
+      # The Makefile reads this, so every make step below uses the job's
+      # representation.
+      NAN_BOXING: ${{ matrix.nan_boxing }}
       ASAN_OPTIONS: abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1
       UBSAN_OPTIONS: print_stacktrace=1
 

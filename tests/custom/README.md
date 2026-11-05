@@ -7,7 +7,7 @@ explanation.
 | Folder | Covers |
 |---|---|
 | `expressions/` | precedence and associativity beyond the official `precedence.lox`, grouping, comments between tokens |
-| `types/` | falsiness (`0` and `""` are truthy), `==`/`!=` across different types |
+| `types/` | falsiness (`0` and `""` are truthy), `==`/`!=` across different types, NaN/infinity/-0 staying numbers in both Value representations |
 | `strings/` | concatenation, equality by content, interning of strings built at runtime |
 | `variables/` | shadowing (the milestone 4 walkthrough), locals vs globals, chained assignment |
 | `runtime_error/` | type errors upstream lacks (`1 + "a"`, `"a" < "b"`), error line numbers, execution stopping at the error |

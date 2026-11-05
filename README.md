@@ -36,6 +36,10 @@ make gclog        # debug build that logs every GC allocation, mark and free
 make gclog-stress # the same, collecting before every allocation
 ```
 
+Values are NaN-boxed by default (chapter 30): each one is a single 64-bit word.
+Add `NAN_BOXING=0` to any target to build and test the tagged-union version
+instead, e.g. `make test NAN_BOXING=0`. CI tests both.
+
 ## Usage
 
 ```sh
@@ -77,7 +81,9 @@ Operands must be two numbers or two strings.
 [line 9] in script
 ```
 
-`bench/fib.lox` times recursive `fib(30)` (2.7 million calls) with `clock()`.
+`bench/` has the book's benchmark programs, `make bench` to time them, and
+`make bench-compare` to run five of them against Python 3. Results and what
+they mean are in [bench/README.md](bench/README.md).
 
 ```
 > var greeting = "hello";
@@ -163,13 +169,14 @@ src/
   debug.c      the disassembler
   main.c       REPL and file runner
 tests/         see the table above
-bench/         benchmark programs (fib.lox)
+bench/         the book's benchmarks (lox/), Python versions (python/), run.py
 tools/         upstream_tests.py: which official tests a chapter should pass
 ```
 
 ## License
 
 MIT; see [LICENSE](LICENSE). Lox and the original clox design are by Robert
-Nystrom. The test scripts in `tests/lox/` come from the
+Nystrom. The test scripts in `tests/lox/` and the benchmarks in `bench/lox/`
+come from the
 [craftinginterpreters](https://github.com/munificent/craftinginterpreters)
 repository (MIT).

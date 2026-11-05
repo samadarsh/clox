@@ -93,11 +93,69 @@ static int countObjects(void) {
   return count;
 }
 
-static void testValueIsSixteenBytes(void) {
+#ifdef NAN_BOXING
+static void testValueSize(void) {
+  // NaN boxing: a Value is a single 64-bit word.
+  CHECK(sizeof(Value) == 8);
+  CHECK(sizeof(Value) == sizeof(double));
+}
+
+// The exact bit patterns, as drawn in value.h. Only NaN boxing has them.
+static void testNanBoxingBits(void) {
+  CHECK(NIL_VAL   == 0x7ffc000000000001);
+  CHECK(FALSE_VAL == 0x7ffc000000000002);
+  CHECK(TRUE_VAL  == 0x7ffc000000000003);
+
+  // A number is stored as its own IEEE 754 bits, unchanged.
+  CHECK(NUMBER_VAL(1.0) == 0x3ff0000000000000);
+  CHECK(NUMBER_VAL(-2.0) == 0xc000000000000000);
+
+  // An object: sign bit + QNAN + the pointer in the low 48 bits.
+  initVM();
+  ObjString* s = copyString("boxed", 5);
+  Value v = OBJ_VAL(s);
+  CHECK((v & 0xfffc000000000000) == 0xfffc000000000000);
+  CHECK((v & 0x0000ffffffffffff) == (uint64_t)(uintptr_t)s);
+  CHECK(AS_OBJ(v) == (Obj*)s);
+  endTest();
+}
+#else
+static void testValueSize(void) {
   // 4-byte tag + 4 bytes padding (so the 8-byte union is 8-byte aligned)
   // + 8-byte union. True on the 64-bit platforms CI runs on.
   CHECK(sizeof(Value) == 16);
   CHECK(sizeof(((Value*)0)->as) == 8);
+}
+#endif
+
+// Both representations must agree on these.
+static void testSpecialNumbers(void) {
+  double zero = 0.0;
+  Value nan = NUMBER_VAL(zero / zero);    // the CPU's own NaN
+  Value inf = NUMBER_VAL(1.0 / zero);
+  Value negZero = NUMBER_VAL(-zero);
+
+  // A real NaN, infinity and -0 are numbers, never nil/bool/object. (With
+  // NaN boxing that depends on QNAN including bit 50, see value.h.)
+  CHECK(IS_NUMBER(nan) && !IS_OBJ(nan) && !IS_NIL(nan) && !IS_BOOL(nan));
+  CHECK(IS_NUMBER(inf) && !IS_OBJ(inf));
+  CHECK(IS_NUMBER(negZero));
+  CHECK(IS_NUMBER(NUMBER_VAL(-zero / zero)));   // NaN with the sign bit set
+
+  // Lox equality on numbers is C's ==: NaN isn't equal to itself, even with
+  // the very same bits, and 0 equals -0 although the bits differ.
+  CHECK(!valuesEqual(nan, nan));
+  CHECK(valuesEqual(negZero, NUMBER_VAL(0)));
+  CHECK(valuesEqual(inf, inf));
+
+  // Pointers survive the round trip through a Value.
+  initVM();
+  ObjString* s = copyString("ptr", 3);
+  push(OBJ_VAL(s));
+  CHECK(IS_OBJ(vm.stackTop[-1]) && AS_OBJ(vm.stackTop[-1]) == (Obj*)s);
+  CHECK(IS_STRING(vm.stackTop[-1]) && AS_STRING(vm.stackTop[-1]) == s);
+  pop();
+  endTest();
 }
 
 static void testTagsAndPayloads(void) {
@@ -299,7 +357,11 @@ static void testClosuresAndUpvalues(void) {
 }
 
 int main(void) {
-  testValueIsSixteenBytes();
+  testValueSize();
+#ifdef NAN_BOXING
+  testNanBoxingBits();
+#endif
+  testSpecialNumbers();
   testTagsAndPayloads();
   testValuesEqual();
   testCopyStringOwnsItsCharacters();

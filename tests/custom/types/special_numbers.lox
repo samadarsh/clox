@@ -1,0 +1,35 @@
+// NaN, infinity and -0 are ordinary numbers in both Value representations.
+// With NaN boxing, clox's own nil/true/false/objects are stored as NaNs, so a
+// NaN made by arithmetic must still be seen as a number and never be mistaken
+// for one of them. (NaN itself isn't printed: "%g" prints it as "nan" on some
+// systems and "-nan" on others.)
+var nan = 0 / 0;
+print nan == nan; // expect: false
+print nan != nan; // expect: true
+print nan == nil; // expect: false
+print nan == false; // expect: false
+print !nan; // expect: false
+print -nan == -nan; // expect: false
+
+var inf = 1 / 0;
+print inf; // expect: inf
+print -inf; // expect: -inf
+print inf == inf; // expect: true
+print inf > 999999999999; // expect: true
+print inf - inf == inf - inf; // expect: false
+
+// -0 equals 0, though the bits differ.
+print -0 == 0; // expect: true
+print -0; // expect: -0
+
+// They survive being stored in fields and globals, and passed around.
+class Box { init(v) { this.v = v; } }
+var b = Box(nan);
+print b.v == b.v; // expect: false
+print Box(inf).v; // expect: inf
+fun id(x) { return x; }
+print id(nan) == nil; // expect: false
+print id(-0) == 0; // expect: true
+
+// Arithmetic on NaN stays a number: no "Operands must be numbers." error.
+print nan + 1 == nan + 1; // expect: false

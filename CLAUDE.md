@@ -51,6 +51,7 @@ tests/cli_test.sh   REPL and exit-code tests
 tests/run_tests.py  runner for "// expect: ..." style tests (same rules as test.dart)
 compile_flags.txt   tells the editor's clangd where the headers are
 tools/upstream_tests.py  lists the official tests a chapter should pass
+bench/              upstream benchmarks (lox/), Python ports (python/), run.py
 ```
 
 To find which official tests a chapter should pass, clone upstream and run
@@ -68,7 +69,12 @@ make test        all tests, release build
 make test-asan   all tests, sanitized build
 make test-stress all tests, GC before every allocation, under ASan
 make gclog / make gclog-stress   builds that log GC activity
-                 (CI runs test, test-asan and test-stress; run all three before asking to commit)
+make bench       time bench/lox/*.lox (best of 5)
+make bench-compare  clox vs Python 3 on bench/python/*.py
+NAN_BOXING=0     add to any target for the tagged-union Value (default 1:
+                 NaN boxing); its builds go in build/<mode>-union/
+                 (CI runs test, test-asan and test-stress with NAN_BOXING=1 and 0;
+                 run all six before asking to commit)
 make clean
 python3 tests/run_tests.py build/debug/clox tests/lox/<dir>   # one suite
 ```

@@ -29,7 +29,8 @@ are `scanning/*.lox` (6) and `expressions/{parse,evaluate}.lox` (2). They test
 the Java interpreter's early chapters, where it prints tokens and syntax trees
 instead of running the program, so upstream skips them for clox too. Running
 them against clox gives 0 passed, 8 failed, as it should. `benchmark/` is
-skipped as well: those are timing programs, not tests (see chapter 30).
+skipped as well: those are timing programs, not tests. They are in
+`bench/lox/` instead (see `bench/README.md`).
 
 Run one file or folder with:
 
